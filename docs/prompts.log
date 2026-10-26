@@ -1,0 +1,57 @@
+
+--- 2026-10-25 19:57:49
+yes delete it and make gitinit
+
+--- 2026-10-25 20:01:47
+let's first refine the customization
+
+--- 2026-10-25 20:03:30
+maybe it is better to ask me what architecture I want. let's start with the backend
+
+--- 2026-10-25 20:14:48
+i want separate packages for repository, model, DTO, service, ServiceImpl, Controller. In repository wi will extend JpaRepository where apropriated. We will use Pageable where appropriqted. We will use method name derived queries where possible and jpql queries where needed. We will never use native sql quieries. We will use liquibase (sql) db migrations. The Services will be interfaces and will have separate implementations. The controllers will be REST controllers. We will use mapstruct to map DTO's to entities. This is for now
+
+--- 2026-10-25 20:18:57
+isn't it too compicated?
+
+--- 2026-10-25 20:20:42
+yes, trim it
+
+--- 2026-10-25 20:27:09
+let's continue with the backend design and review the files created to this moment - are all of them neccessary
+
+--- 2026-10-25 20:29:55
+yes, do the three removals
+
+--- 2026-10-25 20:38:42
+1. At the begining there will be two entities - client, and credit (for this client). 2. Every user can register new client and new credit for the client but only admin can edit/delete. Exceptions will be thrown directly to the user. Tne inputs will be checked double - in the frontend and in the backend; 4. I want every method to has a javadoc (what it does, parameters, return value); 5. backend only validates tokens; 6. We will use lombok. We need to use the principles of OOP, the most important design patterns.
+
+--- 2026-10-25 20:44:46
+yes, users can read all; 2. business logic - later - one by one. 3. I think it is better to put a flag deleted/archived instead of real deletion. If the client have active credit can't be archived/deleted
+
+--- 2026-10-25 20:55:47
+it is too early for the fileds let's finish with the customizations. The frontend must be angular material design with template driven forms
+
+--- 2026-10-25 20:59:19
+by feature, keycloak-angular, yes JSDoc, English
+
+--- 2026-10-25 21:01:35
+all in docker, realm import with test users, same postgres
+
+--- 2026-10-25 21:05:36
+we stop for now. if needed create a todo file for the next session
+
+--- 2026-10-26 10:21:13
+before we continue further check the AI customizations for duplicated info
+
+--- 2026-10-26 10:23:10
+apply all, keep soft-delete in backend/CLAUDE.md
+
+--- 2026-10-26 10:27:51
+in frontend and backend agents you put model:sonnet Is it good enough for the tasks we will have
+
+--- 2026-10-26 10:29:15
+keep sonnet
+
+--- 2026-10-26 10:29:59
+let's commit
