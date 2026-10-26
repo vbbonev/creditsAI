@@ -85,8 +85,24 @@ services:
       retries: 30
       start_period: 30s
 
-  # frontend (nginx: SPA + proxy for /api/ and /auth/) is added with the frontend module, published
-  # on loopback only ("127.0.0.1:80:80"), so the LAN can't reach the app or /auth/admin.
+  # nginx: the Angular SPA plus the proxy for /api/ (backend) and /auth/ (Keycloak).
+  frontend:
+    build: ./frontend
+    # The only published port, on loopback only, so the LAN can't reach the app or /auth/admin.
+    ports:
+      - "127.0.0.1:80:80"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # busybox wget is in the alpine image
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
 volumes:
   postgres-data:

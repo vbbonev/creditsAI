@@ -1,11 +1,12 @@
 # Frontend conventions
 
-Angular with **Angular Material** (Material Design 3) and **template-driven forms**. Requires Node 20+ (`nvm use 20`).
+Angular 22 with **Angular Material** (Material Design 3, theme `azure`/`blue`) and **template-driven forms**. Zoneless, unit tests with Vitest. Requires Node 22.22.3+ (`nvm use 22`).
 
 ## UI: Angular Material only
 - Build every UI element from Angular Material components: `mat-toolbar`, `mat-sidenav`, `mat-card`, `mat-form-field` + `matInput`, `mat-select`, `mat-datepicker`, `mat-button`, `mat-icon`, `mat-table`, `mat-paginator`, `mat-sort`, `mat-dialog`, `mat-snack-bar`.
 - Don't add other UI libraries (no Bootstrap, PrimeNG, Tailwind components). Use custom CSS only for layout and spacing.
 - One Material theme, defined in `src/styles.scss` with `mat.theme(...)`. Don't hardcode colors in components; use the theme's CSS variables.
+- No third-party resources at runtime (no CDNs, no Google Fonts), so the CSP can stay `'self'`. Fonts are self-hosted from npm (`@fontsource/roboto`, `material-symbols`) and listed under `styles` in `angular.json`.
 
 ## Forms: template-driven only
 - Use `FormsModule` with `[(ngModel)]` and a `name` on every control. The form is accessed through `#form="ngForm"`.
@@ -13,6 +14,7 @@ Angular with **Angular Material** (Material Design 3) and **template-driven form
 - Validation is in the template and mirrors the backend DTO constraints: `required`, `minlength`, `maxlength`, `min`, `max`, `pattern`, `email`. Rules the built-in validators can't express go into a custom validator **directive** (implementing `Validator`, registered with `NG_VALIDATORS`).
 - Show errors with `<mat-error>` inside `mat-form-field`, one message per failing validator. Disable submit while `form.invalid`.
 - Validation runs twice: the frontend validation is for user experience, and the backend has the final say. When the backend returns 400 with field errors, show them on the matching controls. Show any other error's `detail` message in a `MatSnackBar`.
+- API errors are handled centrally by `core/http/error.interceptor.ts`: 401 restarts the login, any error except a 400 with `errors` shows its `detail` (or a fallback) in a `MatSnackBar`, and the error is rethrown. So components **don't** open error snackbars themselves; a form only maps a 400's `errors` (see `shared/models/problem-detail.ts`, `hasFieldErrors`) onto its controls.
 
 ## Mapping to the backend
 - Paginated lists: `mat-table` + `mat-paginator` + `matSort`. They map to `page`, `size` and `sort=field,dir` query params and read Spring's `Page` response (`content`, `page.totalElements`).
@@ -22,7 +24,7 @@ Angular with **Angular Material** (Material Design 3) and **template-driven form
 ## Structure: by feature
 ```
 src/app/
-├── core/          app-wide singletons: auth (Keycloak setup, role helpers), HTTP error interceptor, layout (toolbar, sidenav)
+├── core/          app-wide singletons: auth (Keycloak setup, role helpers), HTTP error interceptor, layout (shell with a top horizontal menu in mat-toolbar, no sidenav; not-found page)
 ├── shared/        reusable pieces: validator directives, confirm dialog, page/sort models, pipes
 └── features/
     ├── clients/   client-list, client-form, client-detail components + client.service.ts + client.model.ts

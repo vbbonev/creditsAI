@@ -15,6 +15,19 @@
 - **Issues / fixes:** `pg_isready` over the Unix socket could report healthy before the init script had created the databases. Fixed with `-h 127.0.0.1`, which the security review caught. The hook blocked Claude from writing `.env`, so the user ran `cp -n .env.example .env` instead.
 - **Evidence:** `docker compose up -d --wait postgres keycloak` → both services healthy.
 
+### 2026-10-26 — Frontend container: nginx as the single entry point
+- **Approach:** The nginx in the `frontend` container serves the SPA and proxies `/api/` and `/auth/`, so everything is same-origin on `http://localhost` (no CORS). The security headers come from the frontend security review.
+- **Workflow:**
+  1. User: "add the Dockerfile and nginx". Claude checked the backend's path prefix (`/api` is mapped in the backend, so nginx doesn't strip it) and pinned the image tags from Docker Hub.
+  2. Claude wrote a multi-stage `frontend/Dockerfile` (`node:22.23.4-alpine` → `nginx:1.30.6-alpine`, `nginx -t` at build time), `nginx.conf`, two include files (proxy headers, security headers), and the `frontend` compose service on `127.0.0.1:80:80`.
+  3. Claude updated `.claude/rules/infrastructure.md` and `docs/TODO.md`.
+- **Testing:** `/run-stack` (`up.sh`): all 4 services healthy. curl checks: CSP/nosniff/Referrer-Policy on the SPA but not on `/auth/`, the deep-link fallback, `/actuator` not exposed, not reachable from the LAN IP. A real `admin1` token via auth code + PKCE through nginx (`iss=http://localhost/auth/realms/credits`, `azp=credits-web`): GET/POST/PUT/DELETE with `Origin: http://localhost` reach the backend (404, no endpoint yet), a foreign Origin gets 403.
+- **AI tooling used:** Claude Code inline, infrastructure rule, run-stack skill script.
+- **Key prompt(s):**
+  > add the Dockerfile and nginx
+- **Issues / fixes:** (1) Claude inspected the built `index.html` and found that Angular's critical-CSS inlining adds an inline `<script>`, which the CSP (`script-src 'self'`) blocks, so the page would load without its main stylesheet → set `inlineCritical: false` instead of weakening the CSP. (2) Security headers at server level would also land on `/auth/` and break Keycloak's login-status iframe → included them only in the SPA locations. (3) The test of nginx's per-request DNS (recreating the backend) was inconclusive: the container got the same IP back.
+- **Evidence:** `bash .claude/skills/run-stack/scripts/up.sh`; `curl -sD - -o /dev/null http://localhost/`
+
 ## Database layer
 
 ## Authentication
@@ -29,6 +42,20 @@
 - **AI tooling used:** Claude Code: security rule, `security-reviewer` subagent.
 - **Key prompt(s):** _(none specific; part of "let's create the backend infrastructure")_
 - **Issues / fixes:** A first token taken from `admin-cli` had no role claims, which was misleading. Claude switched to the real `credits-web` PKCE flow, which showed `realm_access.roles` = USER, ADMIN.
+
+### 2026-10-26 — Frontend login with keycloak-angular + security review
+- **Approach:** keycloak-angular 22's functional API: the whole app requires login (`login-required`, PKCE S256), and the bearer token is attached only to requests matching an anchored `/api` regex. Role checks live in one `AuthService`, and `adminGuard` is built with `createAuthGuard`.
+- **Workflow:**
+  1. User: "add keycloak-angular". Claude read the library's type definitions and source to confirm the API, then wrote the auth config, `AuthService`, `adminGuard` and the environment file.
+  2. User: "let's make a security review". The `security-reviewer` subagent ran a read-only audit of the frontend auth code and the realm client: no High findings, 2 Medium (Google Fonts leak the user's IP and need a looser CSP; no CSP yet).
+  3. The user chose to fix them now: fonts self-hosted from npm (`@fontsource/roboto`, `material-symbols`), new negative test cases, and the rest recorded in `docs/TODO.md` (nginx headers, stricter logout redirect, brute-force protection).
+- **Testing:** Vitest: the token is attached to `/api…` (after a refresh) and not to `/apix`, `/API`, absolute or protocol-relative URLs, Keycloak or Google Fonts. Also `isAdmin`/`username`/`logout` and the guard for ADMIN, USER and logged-out users.
+- **AI tooling used:** Claude Code, `security-reviewer` subagent, `frontend/CLAUDE.md` auth conventions.
+- **Key prompt(s):**
+  > delete the scratchpad, then add keycloak-angular
+  > let's make a security review
+- **Issues / fixes:** The `security-reviewer` agent is written for the backend; the prompt redirected it to the frontend files and the keycloak-angular source. The user asked where the token was stored (screenshot of Safari's Storage tab): it's in memory only by design, and the visible cookies are Keycloak's own session cookies.
+- **Evidence:** `npm --prefix frontend test -- --watch=false`
 
 ## Backend API
 
@@ -46,5 +73,20 @@
 - **Evidence:** `backend/mvnw -f backend/pom.xml test`; the backend running from IntelliJ with `GET http://localhost:8080/actuator/health` → `{"status":"UP"}` (good screenshot candidate for `docs/screenshots/`).
 
 ## Frontend
+
+### 2026-10-26 — Angular skeleton, layout shell, HTTP error handling
+- **Approach:** Claude first asked the user, open-ended, how the frontend should look. The user decided: credits get their own list, the conventions in `frontend/CLAUDE.md` stand, and the first step is only the skeleton. Then a top horizontal menu instead of the proposed sidenav. Errors are handled centrally in one interceptor, so pages don't repeat it.
+- **Workflow:**
+  1. User: "let's build the frontend structure". `ng new` failed because Angular 22 needs Node ≥ 22.22.3 and only Node 20 (EOL) was installed. Claude asked; the user chose Node 22 + Angular 22. Claude scaffolded in the scratchpad (zoneless, Vitest, SCSS), copied it into `frontend/`, and ran `ng add @angular/material` (azure/blue M3 theme).
+  2. "now add the layout shell": Claude proposed an ASCII mockup and the user changed it to a top horizontal menu. Claude built the `Shell` (toolbar with Clients/Credits, username, admin icon, logout), lazy-loaded feature routes, placeholder list pages and a not-found page.
+  3. "add the HTTP error interceptor": 401 → login again; 400 with `errors` → left to the form; anything else → the backend's `detail` in a snackbar. Also an `authenticatedGuard` and a "login service unavailable" page for a failed Keycloak init.
+- **Testing:** Vitest 3 → 36 → 76 specs, all green after each step; `npm run build` OK; the container rebuilt and smoke-tested.
+- **AI tooling used:** Claude Code inline, Angular CLI (`ng new`, `ng add`, `ng g component`), AskUserQuestion, `frontend/CLAUDE.md` (JSDoc on everything, Material only, feature folders).
+- **Key prompt(s):**
+  > let's build the frontend structure
+  > let the menu is top horizontal
+  > add the HTTP error interceptor and delete the login test script
+- **Issues / fixes:** (1) Node/Angular version mismatch, found only when the CLI refused to run. (2) A spec built TestBed from the full `appConfig`, which would run the real Keycloak init → moved the icon setting into `provideMaterialDefaults()`. (3) The interceptor spec didn't compile (`unknown` body type) → fixed the type. (4) Limitation: if Keycloak is down at page load, the user sees nginx's 502 page, not the app's "unavailable" page.
+- **Evidence:** `npm --prefix frontend test -- --watch=false` (76 passed); http://localhost after logging in as `user1` and `admin1` (screenshot candidate: the toolbar with the admin icon)
 
 ## Testing

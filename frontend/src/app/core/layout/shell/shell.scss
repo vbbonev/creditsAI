@@ -1,0 +1,64 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  gap: 8px;
+  background-color: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface);
+}
+
+.brand {
+  margin-right: 16px;
+  color: inherit;
+  font: var(--mat-sys-title-large);
+  text-decoration: none;
+}
+
+.menu {
+  display: flex;
+  gap: 4px;
+}
+
+.menu .active {
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: var(--mat-sys-body-large);
+}
+
+.admin {
+  color: var(--mat-sys-primary);
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+}
+
+// Narrow screens: icons only in the menu, no username text
+@media (max-width: 600px) {
+  .label,
+  .username,
+  .brand {
+    display: none;
+  }
+
+  .content {
+    padding: 16px;
+  }
+}
