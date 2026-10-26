@@ -1,0 +1,92 @@
+# creditsAI stack: everything runs in Docker, in development too.
+#   docker compose up -d --build --wait
+# The frontend nginx on http://localhost is the only entry point and the only published port.
+# After a code change, run the same command again to rebuild.
+name: creditsai
+
+services:
+  postgres:
+    image: postgres:16.15
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      CREDITS_DB_PASSWORD: ${CREDITS_DB_PASSWORD:?set CREDITS_DB_PASSWORD in .env}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
+    # No published port: only the backend and Keycloak reach it over the internal network.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Over TCP, not the socket: during the init scripts Postgres listens only on the socket,
+      # so this turns healthy only after the credits/keycloak databases exist.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d credits"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Behind the frontend nginx at http://localhost/auth; no published port
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev", "--import-realm"]
+    volumes:
+      - ./keycloak/import:/opt/keycloak/data/import:ro
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      # Fixed public URL, so the token issuer is always http://localhost/auth/realms/credits
+      KC_HOSTNAME: http://localhost/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY_HEADERS: xforwarded
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The image has no curl; query the management port (9000) with bash's /dev/tcp
+      # (bash explicitly: /bin/sh may be dash, which has no /dev/tcp).
+      # The management port inherits the /auth relative path.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /auth/health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  backend:
+    build: ./backend
+    environment:
+      CREDITS_DB_PASSWORD: ${CREDITS_DB_PASSWORD:?set CREDITS_DB_PASSWORD in .env}
+    # No published port: the frontend nginx proxies /api/ to backend:8080.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # frontend (nginx: SPA + proxy for /api/ and /auth/) is added with the frontend module, published
+  # on loopback only ("127.0.0.1:80:80"), so the LAN can't reach the app or /auth/admin.
+
+volumes:
+  postgres-data:

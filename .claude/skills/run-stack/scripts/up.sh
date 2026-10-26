@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the creditsAI stack and wait until all services respond.
+# Build and start the creditsAI stack (everything in Docker) and wait until it responds through nginx.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -18,8 +18,12 @@ check() { # name url
 }
 
 status=0
-check keycloak http://localhost:8180/realms/credits/.well-known/openid-configuration || status=1
-check backend  http://localhost:8080/actuator/health || status=1
-check frontend http://localhost:4200 || status=1
+# Everything is reached through the frontend nginx on http://localhost (single entry point)
+check frontend http://localhost/ || status=1
+check keycloak http://localhost/auth/realms/credits/.well-known/openid-configuration || status=1
+# The API is protected, so without a token it must answer 401 (proves nginx reaches the backend)
+printf '%-10s ' api
+code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/clients)
+if [[ "$code" == 401 ]]; then echo "OK  http://localhost/api/clients (401 without token)"; else echo "FAIL http://localhost/api/clients (got $code, expected 401)"; status=1; fi
 
 exit $status

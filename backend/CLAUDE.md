@@ -1,6 +1,11 @@
 # Backend conventions
 
-Java 21, Spring Boot 3.5, Maven wrapper, Lombok, MapStruct. Base package `com.creditsai`.
+Java 21, Spring Boot 4.1 (Spring Framework 7, Spring Security 7, Jackson 3), Maven wrapper, Lombok, MapStruct. Base package `com.creditsai`.
+
+## Running
+- The backend only runs in Docker (`docker compose up -d --build --wait`, rebuild after every change). There are no Spring profiles: one `application.yml`, with DB `postgres:5432`, issuer `http://localhost/auth/realms/credits`, JWKS from `keycloak:8080/auth/...`, and no CORS origins (same origin behind nginx; cross-origin preflights get 403).
+- Only secrets come from env vars (`CREDITS_DB_PASSWORD`, set by compose). Tests get the database from Testcontainers (`@ServiceConnection`).
+- Boot 4 moved test annotations into modules: `org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest` / `AutoConfigureMockMvc`, `org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest`. Mock beans with `@MockitoBean`.
 
 ## Packages (by layer)
 ```

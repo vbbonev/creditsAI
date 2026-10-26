@@ -36,6 +36,7 @@ src/app/
 - Use the **functional API** of `keycloak-angular`:
   - `provideKeycloak(...)` in `app.config.ts`, with `url`, `realm` and `clientId` taken from `environment`, and `initOptions: { onLoad: 'login-required', pkceMethod: 'S256' }`. The whole app requires login.
   - The bearer-token interceptor, configured to attach the token **only** to requests that start with `environment.apiUrl`.
+  - One environment, because the app always runs in Docker behind nginx: `apiUrl: '/api'` (same origin, no CORS), Keycloak `url: 'http://localhost/auth'`. See "One mode" in `.claude/rules/infrastructure.md`.
   - `createAuthGuard` for role-protected routes (ADMIN-only routes such as edit).
 - Check roles in one place, a `core/auth` service with `isAdmin()` (realm role `ADMIN`).
 - Never store tokens yourself (no localStorage). keycloak-angular manages and refreshes them.

@@ -1,0 +1,6 @@
+target/
+CLAUDE.md
+.idea/
+*.iml
+.env
+.env.*

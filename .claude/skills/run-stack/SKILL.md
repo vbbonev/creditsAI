@@ -6,7 +6,7 @@ allowed-tools: Bash(bash .claude/skills/run-stack/scripts/*), Bash(docker compos
 
 # Run the stack
 
-1. Run `bash .claude/skills/run-stack/scripts/up.sh`. It checks that `.env` exists, builds and starts all four services, waits for their healthchecks, and then calls each public URL.
+1. Run `bash .claude/skills/run-stack/scripts/up.sh`. It checks that `.env` exists, builds and starts the stack (postgres, keycloak, backend, frontend), waits for their healthchecks, and then calls the public URLs through nginx on http://localhost. Run it again after a code change: it rebuilds the images.
 2. If something fails, show the last 50 lines of `docker compose logs <service>` and diagnose the cause. Common causes:
    - **postgres:** the init script didn't run because the volume already existed. Changing it requires `docker compose down -v`, so ask first.
    - **keycloak:** the realm import failed because of invalid JSON in `keycloak/import/credits-realm.json`, or it can't reach the `keycloak` database.
@@ -14,7 +14,7 @@ allowed-tools: Bash(bash .claude/skills/run-stack/scripts/*), Bash(docker compos
      - Liquibase failed (checksum mismatch or bad changeset).
      - `ddl-auto=validate` found an entity/schema mismatch.
      - Every request gets 401 because of an issuer mismatch. Check `issuer-uri` vs `jwk-set-uri` (see `.claude/rules/infrastructure.md`).
-   - **frontend:** the build failed in the Node stage, or nginx is missing the SPA fallback.
-   - A port is already in use (5432, 8080, 8180, 4200).
+   - **frontend:** the build failed in the Node stage, or nginx is missing the SPA fallback or the `/api/` / `/auth/` proxy locations.
+   - Port 80 is already in use.
 3. When everything is green, print the URLs and test users listed under "Commands" in the root `CLAUDE.md`.
 4. Tell the user the stack is still running. Don't stop it unless they ask (`docker compose down`).

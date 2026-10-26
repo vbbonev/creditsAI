@@ -1,0 +1,6 @@
+databaseChangeLog:
+  - includeAll:
+      path: db/changelog/changes/
+      relativeToChangelogFile: false
+      # The changes/ folder is empty until the first entity exists.
+      errorIfMissingOrEmpty: false

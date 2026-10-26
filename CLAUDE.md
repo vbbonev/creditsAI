@@ -6,19 +6,20 @@ Any logged-in **USER** can register clients and credits. Only an **ADMIN** can e
 ## Modules
 | Module | Location | Tech |
 |---|---|---|
-| Infrastructure | `docker-compose.yml`, `docker/`, `keycloak/import/` | Docker Compose: postgres (app + keycloak DBs), keycloak (realm import), backend, frontend (nginx). See `.claude/rules/infrastructure.md` |
+| Infrastructure | `docker-compose.yml`, `docker/`, `keycloak/import/` | Docker Compose, one mode for development and demos: postgres (app + keycloak DBs), keycloak (realm import), backend, frontend (nginx: SPA + proxy for `/api/` and `/auth/`, the single entry point on `http://localhost`). See `.claude/rules/infrastructure.md` |
 | Database layer | `backend/src/main/resources/db/changelog` | Liquibase (formatted SQL), Spring Data JPA |
 | Authentication | `keycloak/import/credits-realm.json`, `backend/**/security`, `frontend/src/app/core/auth` | Keycloak OIDC, Spring Security resource server, keycloak-angular |
-| Backend API | `backend/` | Java 21, Spring Boot 3.5, Maven, MapStruct (see `backend/CLAUDE.md`) |
+| Backend API | `backend/` | Java 21, Spring Boot 4.1, Maven, MapStruct (see `backend/CLAUDE.md`) |
 | Frontend | `frontend/` | Angular, Angular Material, template-driven forms (see `frontend/CLAUDE.md`) |
 | Testing | `backend/src/test` | JUnit 5, Testcontainers |
 
 ## Commands
-- Start everything: `/run-stack` (or `docker compose up -d --build --wait`). First copy `.env.example` to `.env`.
+- First copy `.env.example` to `.env` and set the passwords.
+- Everything runs in Docker, in development too (no dev/prod modes): `/run-stack` (or `docker compose up -d --build --wait`) starts postgres, keycloak, backend and the frontend nginx. Run the same command again to rebuild after a code change. Stop with `docker compose down`.
 - Test users: `user1`/`user1` (USER), `admin1`/`admin1` (ADMIN)
 - Backend tests: `backend/mvnw -f backend/pom.xml test`
-- Frontend: `npm --prefix frontend start` · tests: `npm --prefix frontend test -- --watch=false`
-- URLs: frontend http://localhost:4200, API http://localhost:8080/api, Keycloak http://localhost:8180
+- Frontend tests: `npm --prefix frontend test -- --watch=false`
+- URL: everything on http://localhost (the only published port), with nginx routing `/`, `/api/` and `/auth/` (Keycloak)
 
 ## Working rules
 - Never run `git add` / `git commit` / `git push`. The user commits.

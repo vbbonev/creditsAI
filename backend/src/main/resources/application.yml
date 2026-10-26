@@ -1,0 +1,41 @@
+# The backend always runs in Docker (docker compose up -d --build --wait).
+# The browser reaches everything through the frontend nginx on http://localhost; the backend reaches
+# the other containers by their service names. Passwords come from compose environment variables.
+spring:
+  application:
+    name: creditsai-backend
+  datasource:
+    url: jdbc:postgresql://postgres:5432/credits
+    username: credits
+    password: ${CREDITS_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # issuer-uri is never called: it is only compared with the token's "iss" claim, which is
+          # the public URL the browser used (Keycloak behind nginx at /auth) ...
+          issuer-uri: http://localhost/auth/realms/credits
+          # ... while signing keys are fetched from Keycloak directly over the internal network.
+          jwk-set-uri: http://keycloak:8080/auth/realms/credits/protocol/openid-connect/certs
+
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  security:
+    # Only tokens whose "azp" (authorized party) is this Keycloak client are accepted
+    client-id: credits-web
