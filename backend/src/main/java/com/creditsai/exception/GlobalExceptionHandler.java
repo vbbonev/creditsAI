@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -32,6 +33,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     static final String VALIDATION_FAILED = "Some fields are invalid. Please correct them and try again.";
     static final String ACCESS_DENIED = "You do not have permission to perform this action.";
     static final String UNEXPECTED_ERROR = "An unexpected error occurred. Please try again later.";
+    static final String UNSUPPORTED_PROPERTY = "The request refers to a field that is not supported.";
 
     /**
      * Answers a missing or archived record with 404.
@@ -53,6 +55,30 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(BusinessRuleException.class)
     public ProblemDetail handleBusinessRule(BusinessRuleException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Answers an unacceptable request parameter with 400.
+     *
+     * @param ex the exception carrying the user-readable message
+     * @return the problem detail
+     */
+    @ExceptionHandler(InvalidRequestException.class)
+    public ProblemDetail handleInvalidRequest(InvalidRequestException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    /**
+     * Answers a sort (or other property path) naming an unknown entity property with 400 instead
+     * of 500. A safety net behind the controllers' sort allow-lists; the exception's own message
+     * names internal types, so a generic text is sent.
+     *
+     * @param ex the exception thrown by Spring Data
+     * @return the problem detail
+     */
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ProblemDetail handlePropertyReference(PropertyReferenceException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, UNSUPPORTED_PROPERTY);
     }
 
     /**

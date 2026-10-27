@@ -16,6 +16,8 @@ import java.util.Map;
 
 import com.creditsai.exception.BusinessRuleException;
 import com.creditsai.exception.GlobalExceptionHandler;
+import com.creditsai.exception.InvalidRequestException;
+import org.springframework.data.core.PropertyPath;
 import com.creditsai.exception.ResourceNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -131,6 +133,29 @@ class SecurityAndErrorHandlingTest {
     }
 
     @Test
+    void invalidRequest_returns400ProblemDetailWithMessage() throws Exception {
+        // given
+        givenToken(USER_TOKEN, "USER");
+
+        // when / then
+        mockMvc.perform(get("/api/probe/invalid").header(HttpHeaders.AUTHORIZATION, bearer(USER_TOKEN)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Sorting by 'secret' is not supported."));
+    }
+
+    @Test
+    void unknownPropertyReference_returns400WithGenericMessageAndNoInternals() throws Exception {
+        // given
+        givenToken(USER_TOKEN, "USER");
+
+        // when / then
+        mockMvc.perform(get("/api/probe/unknown-property").header(HttpHeaders.AUTHORIZATION, bearer(USER_TOKEN)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("The request refers to a field that is not supported."))
+                .andExpect(content().string(Matchers.not(Matchers.containsString("ProbeRequest"))));
+    }
+
+    @Test
     void invalidBody_returns400WithFieldErrors() throws Exception {
         // given
         givenToken(USER_TOKEN, "USER");
@@ -230,6 +255,20 @@ class SecurityAndErrorHandlingTest {
         @PreAuthorize("hasAnyRole('USER','ADMIN')")
         String conflict() {
             throw new BusinessRuleException("The client has an active credit and cannot be archived.");
+        }
+
+        @GetMapping("/invalid")
+        @PreAuthorize("hasAnyRole('USER','ADMIN')")
+        String invalid() {
+            throw new InvalidRequestException("Sorting by 'secret' is not supported.");
+        }
+
+        @GetMapping("/unknown-property")
+        @PreAuthorize("hasAnyRole('USER','ADMIN')")
+        String unknownProperty() {
+            // throws PropertyReferenceException, like a repository given an unknown sort field
+            PropertyPath.from("secret", ProbeRequest.class);
+            return "unreachable";
         }
 
         @GetMapping("/boom")

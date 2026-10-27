@@ -72,6 +72,21 @@
 - **Issues / fixes:** (1) Initializr wrote the parent version as `4.1.2.RELEASE`, which doesn't exist on Maven Central → changed to `4.1.2`. (2) Boot 4 moved the test annotations (`org.springframework.boot.webmvc.test.autoconfigure.*`). (3) `changes/.gitkeep` made Liquibase log a parse error → removed it and rely on `errorIfMissingOrEmpty: false`. (4) The user's IntelliJ run configuration was a Maven one with no goals ("No goals have been specified") → added `backend/pom.xml` as a Maven project and ran `BackendApplication` from the gutter with JDK 21.
 - **Evidence:** `backend/mvnw -f backend/pom.xml test`; the backend running from IntelliJ with `GET http://localhost:8080/actuator/health` → `{"status":"UP"}` (good screenshot candidate for `docs/screenshots/`).
 
+### 2026-10-27 — Client resource (CRUD + archive/restore)
+- **Approach:** Claude asked about the design before writing code (identifier format and uniqueness, lengths, archived visibility, scope). Decisions: `identifier` is free text and not unique (foreign persons/companies), ADMIN can view, edit and restore archived clients, backend only. Archive/restore rules live in the entity (`client.archive()`/`restore()`, no setters for `archived`), which the user chose after asking what that meant.
+- **Workflow:**
+  1. Claude asked 6 design questions, then presented a plan via the `/new-endpoint` skill (table, endpoints, queries) for confirmation.
+  2. The `backend-dev` subagent wrote the changeset `001-create-clients.sql`, entity, repository (derived queries), DTOs, MapStruct mapper, service + impl, and controller.
+  3. `test-writer` and `security-reviewer` ran in parallel. The review found no High issues and 2 Medium: unknown sort field → 500, and no page-size cap.
+  4. The user chose a max page size of 100 plus a sort allow-list. Claude added `InvalidRequestException` (400), a `PropertyReferenceException` → 400 fallback, the allow-list in the controller, and `@P("archived")`.
+- **Testing:** 74 new tests: entity, service (Mockito), controller role matrix (`@WebMvcTest`), repository and full-flow integration (Testcontainers Postgres). The whole suite has 104 tests, all green.
+- **AI tooling used:** Claude Code: `/new-endpoint` skill, `backend-dev`, `test-writer` and `security-reviewer` subagents, the liquibase, jpa-repositories, security and java-tests rules.
+- **Key prompt(s):**
+  > let's implement the Client entity. The required fields are id, name, identifier, address and description (optional field)
+  > 100 is ok, use the 400 handler plus allow-list
+- **Issues / fixes:** (1) Bash permission checks failed transiently ("auto mode classifier gave no verdict"), so the subagent couldn't compile; the user ran `! backend/mvnw ... compile` by hand. (2) The agent put `@EnableSpringDataWebSupport(VIA_DTO)` on the app class, which makes Boot's auto-configuration step aside and silently ignore `spring.data.web.pageable.*` such as `max-page-size` → moved to `application.yml`. (3) Spring Data 4 moved `PropertyReferenceException`/`PropertyPath` to `org.springframework.data.core` (compile error). (4) An old test expected 404 on `/api/clients` because the endpoint hadn't existed → now 200.
+- **Evidence:** `backend/mvnw -f backend/pom.xml test` → Tests run: 104, Failures: 0.
+
 ## Frontend
 
 ### 2026-10-26 — Angular skeleton, layout shell, HTTP error handling

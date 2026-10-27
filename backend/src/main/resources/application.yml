@@ -14,6 +14,13 @@ spring:
       ddl-auto: validate
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
+  data:
+    web:
+      pageable:
+        # Stable page JSON: {content, page: {size, number, totalElements, totalPages}}
+        serialization-mode: via-dto
+        # Larger ?size= values are clamped to this
+        max-page-size: 100
   security:
     oauth2:
       resourceserver:

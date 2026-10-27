@@ -40,7 +40,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * public key is served by an in-process JWKS endpoint. Proves that signature, issuer and the
  * {@code azp} restriction from {@link SecurityConfig} are all enforced together.
  *
- * <p>An authenticated request to a path with no endpoint gives 404; a rejected token gives 401.
+ * <p>An authenticated request to {@code /api/clients} gives 200 (the token has the USER role); a rejected token gives 401.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -74,7 +74,7 @@ class JwtValidationIntegrationTest {
 
         // when / then
         mockMvc.perform(get("/api/clients").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
     }
 
     @Test
