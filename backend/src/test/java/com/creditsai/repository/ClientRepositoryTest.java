@@ -24,8 +24,12 @@ class ClientRepositoryTest {
     @Autowired
     private ClientRepository repository;
 
+    @Autowired
+    private com.creditsai.repository.CreditRepository creditRepository;
+
     @BeforeEach
     void clean() {
+        creditRepository.deleteAll();
         repository.deleteAll();
     }
 

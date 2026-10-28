@@ -112,6 +112,30 @@
   6. During cleanup Claude found 38 leftover `attachments-it*`/`attachments-http*` folders in the system temp dir: the two integration tests created a storage folder per run and never removed it → `@AfterAll` with `FileSystemUtils.deleteRecursively`; after a full run (288 green) nothing is left behind.
 - **Evidence:** `backend/mvnw -f backend/pom.xml test` (288 passed); `docker compose logs backend | grep "Attachment cleanup"`
 
+### 2026-10-28 — Credit resource with payment plan (annuity, 30/360)
+- **Approach:** Claude asked open questions first (repayment type, day-count convention, dates, rounding, calculate/save flow, statuses), then two rounds of multiple-choice questions on the details. The user decided:
+  - Annuity with 30/360 (the user changed it from ACT/365 "for simplicity"). Payment dates fall on the same day of the month, clamped to month end, and the end date must be a whole number of months after the start. The last payment absorbs the rounding difference.
+  - `/calculate` is a stateless preview. On save the server recalculates from the inputs and stores the plan as rows.
+  - An auto-generated credit number, type, and collateral (value + description).
+  - An explicit ACTIVE/INACTIVE status that only ADMIN changes. An ACTIVE credit can't be archived. One credit list with search and status filter.
+- **Workflow:**
+  1. The `/new-endpoint` skill led to `backend-dev`, which built changesets 005/006, the entity, the calculator, the class-level validators, the service and the controller. It also added the "active credit blocks client archive" rule.
+  2. Claude reviewed the calculator. Then `test-writer` and `security-reviewer` ran in parallel.
+  3. The review had no High findings, 1 Medium and 2 Low. The user chose the fixes, `backend-dev` applied them (resumed via SendMessage), and `test-writer` added tests for them.
+- **Testing:** 288 → 487 → 523 tests, all green (Claude re-ran the full suite). Coverage: calculator known values (10,000 at 12% for 12 months gives 888.49, 0%, 1 and 480 months, 31 Jan in leap years), entity rules, validators, the WebMvc role matrix, a schema constraints test, and an API lifecycle on Testcontainers.
+- **AI tooling used:** Claude Code with the `/new-endpoint` skill, the `backend-dev`/`test-writer`/`security-reviewer` subagents, AskUserQuestion, and the jpa-repositories/liquibase rules.
+- **Key prompt(s):**
+  > For new credit the user must select client(autocomplete by name/identifier), credit start and end date, amount, interest rate, currency(EUR,USD,CHF). Then the backend need to calculate payment plan (monthly payments using ACT/365 convention)...
+  > When user saves the plan we don't trust the plan but recalculate on the server from the inputs.
+- **Issues / fixes:**
+  1. Review Medium: USER could see INACTIVE credits of archived clients, and with them the client's name and identifier → these credits are now hidden from USER like archived credits.
+  2. Review Low: create returned 409 for an archived client, which let a USER find out which archived clients exist → now it returns the same 404 as a missing client.
+  3. Review Low: dates had no bounds and the term was cast to int without a check (wraparound or 500) → start ≥ 1900 and end ≤ 2200, plus `Math.toIntExact`.
+  4. Money columns were NUMERIC(15,2) against the liquibase rule's (12,2) → fixed before commit.
+  5. Create and PUT responses lost the decimal scale (`5000` vs `5000.00`) → the entity normalizes the scale.
+  6. Hibernate inserts before it deletes, so regenerating a plan broke the unique `(credit_id, payment_number)` → clear the rows and flush first.
+- **Evidence:** `backend/mvnw -f backend/pom.xml test` → Tests run: 523, Failures: 0, Errors: 0
+
 ## Frontend
 
 ### 2026-10-26 — Angular skeleton, layout shell, HTTP error handling

@@ -1,0 +1,28 @@
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 40px;
+  margin: 0 0 16px;
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-label-large);
+  }
+
+  dd {
+    margin: 0;
+    font: var(--mat-sys-title-medium);
+  }
+}
+
+// Fixed height: the table scrolls inside, the header stays visible
+.scroll {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-small);
+}
+
+.amount {
+  text-align: right;
+}

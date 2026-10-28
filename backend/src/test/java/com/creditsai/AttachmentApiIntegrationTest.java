@@ -62,6 +62,9 @@ class AttachmentApiIntegrationTest {
     @Autowired
     private ClientRepository repository;
 
+    @Autowired
+    private com.creditsai.repository.CreditRepository creditRepository;
+
     private static Path createStorageDir() {
         try {
             return Files.createTempDirectory("attachments-it");
@@ -82,6 +85,7 @@ class AttachmentApiIntegrationTest {
 
     @BeforeEach
     void clean() throws IOException {
+        creditRepository.deleteAll();
         repository.deleteAll();
         try (Stream<Path> s = Files.list(STORAGE)) {
             for (Path p : s.toList()) {

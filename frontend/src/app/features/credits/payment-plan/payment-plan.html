@@ -1,0 +1,63 @@
+<dl class="totals">
+  <div>
+    <dt>Term</dt>
+    <dd class="term">{{ plan().termMonths }} months</dd>
+  </div>
+  <div>
+    <dt>Monthly payment</dt>
+    <dd class="monthly">{{ plan().monthlyPayment | currency: currency() : 'symbol' }}</dd>
+  </div>
+  <div>
+    <dt>Total interest</dt>
+    <dd class="interest">{{ plan().totalInterest | currency: currency() : 'symbol' }}</dd>
+  </div>
+  <div>
+    <dt>Total paid</dt>
+    <dd class="paid">{{ plan().totalPaid | currency: currency() : 'symbol' }}</dd>
+  </div>
+</dl>
+
+<div class="scroll" tabindex="0" role="region" aria-label="Payment plan">
+  <table mat-table [dataSource]="plan().rows">
+    <ng-container matColumnDef="number">
+      <th mat-header-cell *matHeaderCellDef>#</th>
+      <td mat-cell *matCellDef="let row">{{ row.number }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="date">
+      <th mat-header-cell *matHeaderCellDef>Date</th>
+      <td mat-cell *matCellDef="let row">{{ row.date | date: 'dd.MM.yyyy' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="payment">
+      <th mat-header-cell *matHeaderCellDef class="amount">Payment</th>
+      <td mat-cell *matCellDef="let row" class="amount">
+        {{ row.payment | currency: currency() : 'symbol' }}
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="principal">
+      <th mat-header-cell *matHeaderCellDef class="amount">Principal</th>
+      <td mat-cell *matCellDef="let row" class="amount">
+        {{ row.principal | currency: currency() : 'symbol' }}
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="interest">
+      <th mat-header-cell *matHeaderCellDef class="amount">Interest</th>
+      <td mat-cell *matCellDef="let row" class="amount">
+        {{ row.interest | currency: currency() : 'symbol' }}
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="remainingBalance">
+      <th mat-header-cell *matHeaderCellDef class="amount">Remaining balance</th>
+      <td mat-cell *matCellDef="let row" class="amount">
+        {{ row.remainingBalance | currency: currency() : 'symbol' }}
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="columns; sticky: true"></tr>
+    <tr mat-row *matRowDef="let row; columns: columns"></tr>
+  </table>
+</div>

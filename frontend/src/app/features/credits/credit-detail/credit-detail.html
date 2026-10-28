@@ -1,0 +1,112 @@
+<mat-card appearance="outlined">
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  @if (credit(); as credit) {
+    <mat-card-header>
+      <mat-card-title>
+        {{ credit.creditNumber }}
+        @if (credit.archived) {
+          <mat-chip-set class="archived-chip">
+            <mat-chip disableRipple>Archived</mat-chip>
+          </mat-chip-set>
+        }
+      </mat-card-title>
+      <mat-card-subtitle>Credit</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <dl class="fields">
+        <dt>Client</dt>
+        <dd class="client">{{ credit.client.name }} ({{ credit.client.identifier }})</dd>
+
+        <dt>Type</dt>
+        <dd class="type">{{ typeLabels[credit.type] }}</dd>
+
+        <dt>Status</dt>
+        <dd class="status">{{ statusLabels[credit.status] }}</dd>
+
+        <dt>Amount</dt>
+        <dd class="amount">{{ credit.amount | currency: credit.currency : 'symbol' }}</dd>
+
+        <dt>Interest rate</dt>
+        <dd class="rate">{{ credit.interestRate | number: '1.0-4' }}% per year</dd>
+
+        <dt>Start date</dt>
+        <dd class="start">{{ credit.startDate | date: 'dd.MM.yyyy' }}</dd>
+
+        <dt>End date</dt>
+        <dd class="end">{{ credit.endDate | date: 'dd.MM.yyyy' }}</dd>
+
+        <dt>Collateral</dt>
+        <dd class="collateral">
+          @if (credit.hasCollateral) {
+            {{ credit.collateralValue | currency: credit.currency : 'symbol' }}
+            <span class="collateral-description">{{ credit.collateralDescription }}</span>
+          } @else {
+            None
+          }
+        </dd>
+
+        <dt>Created</dt>
+        <dd>{{ credit.createdAt | date: 'dd.MM.yyyy HH:mm' }}</dd>
+
+        <dt>Last changed</dt>
+        <dd>{{ credit.updatedAt | date: 'dd.MM.yyyy HH:mm' }}</dd>
+
+        @if (credit.archivedAt) {
+          <dt>Archived</dt>
+          <dd>{{ credit.archivedAt | date: 'dd.MM.yyyy HH:mm' }}</dd>
+        }
+      </dl>
+
+      <h3 class="plan-title">Payment plan</h3>
+      <app-payment-plan [plan]="credit.plan" [currency]="credit.currency" />
+    </mat-card-content>
+
+    <mat-card-actions class="actions">
+      <a mat-button routerLink="/credits">
+        <mat-icon>arrow_back</mat-icon>
+        Back to list
+      </a>
+      @if (isAdmin) {
+        <span class="spacer"></span>
+        @if (credit.archived) {
+          <button mat-flat-button [disabled]="busy()" (click)="restore(credit)">
+            <mat-icon>unarchive</mat-icon>
+            Restore
+          </button>
+        } @else {
+          <a mat-stroked-button [routerLink]="['/credits', credit.id, 'edit']">
+            <mat-icon>edit</mat-icon>
+            Edit
+          </a>
+          <button mat-stroked-button [disabled]="busy()" (click)="toggleStatus(credit)">
+            <mat-icon>{{ credit.status === 'ACTIVE' ? 'pause_circle' : 'play_circle' }}</mat-icon>
+            {{ credit.status === 'ACTIVE' ? 'Deactivate' : 'Activate' }}
+          </button>
+          @if (credit.status === 'INACTIVE') {
+            <button mat-flat-button [disabled]="busy()" (click)="archive(credit)">
+              <mat-icon>archive</mat-icon>
+              Archive
+            </button>
+          }
+        }
+      }
+    </mat-card-actions>
+  } @else if (notFound()) {
+    <mat-card-header>
+      <mat-card-title>Credit not found</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>This credit doesn't exist or is no longer available.</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a mat-button routerLink="/credits">
+        <mat-icon>arrow_back</mat-icon>
+        Back to list
+      </a>
+    </mat-card-actions>
+  }
+</mat-card>

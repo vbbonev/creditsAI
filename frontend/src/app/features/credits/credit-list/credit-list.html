@@ -1,8 +1,161 @@
 <mat-card appearance="outlined">
   <mat-card-header>
     <mat-card-title>Credits</mat-card-title>
+    <span class="spacer"></span>
+    <a mat-flat-button routerLink="/credits/new">
+      <mat-icon>add</mat-icon>
+      New credit
+    </a>
   </mat-card-header>
+
   <mat-card-content>
-    <p>The credits list comes here once the fields are decided.</p>
+    <div class="filters">
+      <mat-form-field class="search" subscriptSizing="dynamic">
+        <mat-label>Search by credit number, client name or identifier</mat-label>
+        <mat-icon matPrefix>search</mat-icon>
+        <input
+          matInput
+          name="search"
+          type="search"
+          autocomplete="off"
+          [(ngModel)]="searchText"
+          (ngModelChange)="onSearch($event)"
+        />
+      </mat-form-field>
+
+      <mat-form-field class="status" subscriptSizing="dynamic">
+        <mat-label>Status</mat-label>
+        <mat-select
+          name="status"
+          [ngModel]="query().status"
+          (ngModelChange)="onStatusChange($event)"
+        >
+          <mat-option [value]="null">All</mat-option>
+          <mat-option value="ACTIVE">Active</mat-option>
+          <mat-option value="INACTIVE">Inactive</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      @if (isAdmin) {
+        <mat-slide-toggle
+          [checked]="query().includeArchived"
+          (change)="onIncludeArchivedChange($event)"
+        >
+          Show archived credits
+        </mat-slide-toggle>
+      }
+    </div>
+
+    <div class="table-wrapper">
+      @if (loading()) {
+        <mat-progress-bar mode="indeterminate" />
+      }
+      <table
+        mat-table
+        [dataSource]="credits()"
+        matSort
+        matSortActive="creditNumber"
+        matSortDirection="asc"
+        matSortDisableClear
+        (matSortChange)="onSort($event)"
+      >
+        <ng-container matColumnDef="creditNumber">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Credit number</th>
+          <td mat-cell *matCellDef="let credit">
+            {{ credit.creditNumber }}
+            @if (credit.archived) {
+              <mat-chip-set class="archived-chip">
+                <mat-chip disableRipple>Archived</mat-chip>
+              </mat-chip-set>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="client">
+          <th mat-header-cell *matHeaderCellDef>Client</th>
+          <td mat-cell *matCellDef="let credit">
+            {{ credit.client.name }}
+            <span class="identifier">({{ credit.client.identifier }})</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="type">
+          <th mat-header-cell *matHeaderCellDef>Type</th>
+          <td mat-cell *matCellDef="let credit">{{ typeLabel(credit.type) }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="amount">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header class="amount">Amount</th>
+          <td mat-cell *matCellDef="let credit" class="amount">
+            {{ credit.amount | currency: credit.currency : 'symbol' }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="interestRate">
+          <th mat-header-cell *matHeaderCellDef class="amount">Rate</th>
+          <td mat-cell *matCellDef="let credit" class="amount">
+            {{ credit.interestRate | number: '1.0-4' }}%
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="startDate">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Start date</th>
+          <td mat-cell *matCellDef="let credit">{{ credit.startDate | date: 'dd.MM.yyyy' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="endDate">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>End date</th>
+          <td mat-cell *matCellDef="let credit">{{ credit.endDate | date: 'dd.MM.yyyy' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="monthlyPayment">
+          <th mat-header-cell *matHeaderCellDef class="amount">Monthly payment</th>
+          <td mat-cell *matCellDef="let credit" class="amount">
+            {{ credit.monthlyPayment | currency: credit.currency : 'symbol' }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let credit">
+            {{ statusLabel(credit.status) }}
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columns"></tr>
+        <tr
+          mat-row
+          *matRowDef="let credit; columns: columns"
+          class="credit-row"
+          [class.archived]="credit.archived"
+          tabindex="0"
+          role="link"
+          [attr.aria-label]="'Open credit ' + credit.creditNumber"
+          (click)="open(credit)"
+          (keydown.enter)="open(credit)"
+        ></tr>
+        <tr class="mat-mdc-row" *matNoDataRow>
+          <td class="mat-mdc-cell no-data" [attr.colspan]="columns.length">
+            @if (!loading()) {
+              {{
+                query().search || query().status
+                  ? 'No credits match your search.'
+                  : 'No credits yet.'
+              }}
+            }
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <mat-paginator
+      [length]="total()"
+      [pageIndex]="query().page"
+      [pageSize]="query().size"
+      [pageSizeOptions]="pageSizeOptions"
+      showFirstLastButtons
+      (page)="onPage($event)"
+      aria-label="Select page of credits"
+    />
   </mat-card-content>
 </mat-card>

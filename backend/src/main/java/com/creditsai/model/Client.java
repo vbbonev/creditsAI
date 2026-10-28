@@ -79,6 +79,11 @@ public class Client {
     @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ClientAttachment> attachments = new ArrayList<>();
 
+    /** The credits of this client; read here only to check the archive rule, changed through {@link Credit}. */
+    @Getter(AccessLevel.NONE)
+    @OneToMany(mappedBy = "client")
+    private List<Credit> credits = new ArrayList<>();
+
     /**
      * Returns the attachments as a read-only view; change them only with {@link #addAttachment}
      * and {@link #removeAttachment}.
@@ -169,14 +174,14 @@ public class Client {
     /**
      * Archives this client (soft delete) and records when it happened.
      *
-     * <p>Note: the rule "a client with an active credit cannot be archived" will be added here
-     * when the Credit entity exists.
-     *
-     * @throws BusinessRuleException if the client is already archived
+     * @throws BusinessRuleException if the client is already archived or has an active credit
      */
     public void archive() {
         if (archived) {
             throw new BusinessRuleException("This client is already archived.");
+        }
+        if (credits.stream().anyMatch(c -> !c.isArchived() && c.getStatus() == CreditStatus.ACTIVE)) {
+            throw new BusinessRuleException("Client has active credits and cannot be archived.");
         }
         archived = true;
         archivedAt = Instant.now();

@@ -1,0 +1,331 @@
+<mat-card appearance="outlined">
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  @if (notFound()) {
+    <mat-card-header>
+      <mat-card-title>Credit not found</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>This credit doesn't exist or is no longer available.</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a mat-button routerLink="/credits">
+        <mat-icon>arrow_back</mat-icon>
+        Back to list
+      </a>
+    </mat-card-actions>
+  } @else if (!loading()) {
+    <mat-card-header>
+      <mat-card-title>{{ isEdit ? 'Edit credit ' + creditNumber() : 'New credit' }}</mat-card-title>
+    </mat-card-header>
+
+    <form #form="ngForm" (ngSubmit)="save(form)" novalidate>
+      <mat-card-content>
+        <div class="grid">
+          <mat-form-field class="wide">
+            <mat-label>Client</mat-label>
+            <input
+              matInput
+              name="clientId"
+              autocomplete="off"
+              [(ngModel)]="model.client"
+              (ngModelChange)="onClientChange($event)"
+              #client="ngModel"
+              required
+              appPickedOption
+              [matAutocomplete]="clientAuto"
+              cdkFocusInitial
+            />
+            <mat-autocomplete #clientAuto="matAutocomplete" [displayWith]="displayClient">
+              @for (option of clientOptions(); track option.id) {
+                <mat-option [value]="option">{{ displayClient(option) }}</mat-option>
+              }
+            </mat-autocomplete>
+            <mat-hint>Type a name or identifier and pick the client from the list.</mat-hint>
+            @if (client.hasError('required')) {
+              <mat-error>Client is required.</mat-error>
+            } @else if (client.hasError('notPicked')) {
+              <mat-error>Pick a client from the list.</mat-error>
+            } @else if (client.hasError('server')) {
+              <mat-error>{{ client.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Type</mat-label>
+            <mat-select
+              name="type"
+              [(ngModel)]="model.type"
+              (ngModelChange)="clearPlan()"
+              #type="ngModel"
+              required
+            >
+              @for (option of types; track option) {
+                <mat-option [value]="option">{{ typeLabels[option] }}</mat-option>
+              }
+            </mat-select>
+            @if (type.hasError('required')) {
+              <mat-error>Type is required.</mat-error>
+            } @else if (type.hasError('server')) {
+              <mat-error>{{ type.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Amount</mat-label>
+            <input
+              matInput
+              type="number"
+              name="amount"
+              [(ngModel)]="model.amount"
+              (ngModelChange)="clearPlan()"
+              #amount="ngModel"
+              required
+              [min]="limits.minAmount"
+              [max]="limits.maxAmount"
+              [appMaxDecimals]="limits.maxAmountDecimals"
+            />
+            @if (amount.hasError('required')) {
+              <mat-error>Amount is required.</mat-error>
+            } @else if (amount.hasError('min')) {
+              <mat-error>Amount must be greater than zero.</mat-error>
+            } @else if (amount.hasError('max')) {
+              <mat-error>Amount must be at most {{ limits.maxAmount }}.</mat-error>
+            } @else if (amount.hasError('maxDecimals')) {
+              <mat-error
+                >Amount may have at most {{ limits.maxAmountDecimals }} decimals.</mat-error
+              >
+            } @else if (amount.hasError('server')) {
+              <mat-error>{{ amount.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Currency</mat-label>
+            <mat-select
+              name="currency"
+              [(ngModel)]="model.currency"
+              (ngModelChange)="clearPlan()"
+              #currency="ngModel"
+              required
+            >
+              @for (option of currencies; track option) {
+                <mat-option [value]="option">{{ option }}</mat-option>
+              }
+            </mat-select>
+            @if (currency.hasError('required')) {
+              <mat-error>Currency is required.</mat-error>
+            } @else if (currency.hasError('server')) {
+              <mat-error>{{ currency.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Interest rate (% per year)</mat-label>
+            <input
+              matInput
+              type="number"
+              name="interestRate"
+              [(ngModel)]="model.interestRate"
+              (ngModelChange)="clearPlan()"
+              #interestRate="ngModel"
+              required
+              [min]="limits.minRate"
+              [max]="limits.maxRate"
+              [appMaxDecimals]="limits.maxRateDecimals"
+            />
+            @if (interestRate.hasError('required')) {
+              <mat-error>Interest rate is required.</mat-error>
+            } @else if (interestRate.hasError('min') || interestRate.hasError('max')) {
+              <mat-error>
+                Interest rate must be between {{ limits.minRate }} and {{ limits.maxRate }} percent.
+              </mat-error>
+            } @else if (interestRate.hasError('maxDecimals')) {
+              <mat-error>
+                Interest rate may have at most {{ limits.maxRateDecimals }} decimals.
+              </mat-error>
+            } @else if (interestRate.hasError('server')) {
+              <mat-error>{{ interestRate.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>Start date</mat-label>
+            <input
+              matInput
+              name="startDate"
+              placeholder="dd.MM.yyyy"
+              [matDatepicker]="startPicker"
+              [min]="limits.minStartDate"
+              [(ngModel)]="model.startDate"
+              (ngModelChange)="clearPlan()"
+              #startDate="ngModel"
+              required
+            />
+            <mat-datepicker-toggle matIconSuffix [for]="startPicker" />
+            <mat-datepicker #startPicker />
+            @if (startDate.hasError('matDatepickerParse')) {
+              <mat-error>Enter a date as dd.MM.yyyy.</mat-error>
+            } @else if (startDate.hasError('required')) {
+              <mat-error>Start date is required.</mat-error>
+            } @else if (startDate.hasError('matDatepickerMin')) {
+              <mat-error>Start date must be on or after 01.01.1900.</mat-error>
+            } @else if (startDate.hasError('server')) {
+              <mat-error>{{ startDate.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-form-field>
+            <mat-label>End date</mat-label>
+            <input
+              matInput
+              name="endDate"
+              placeholder="dd.MM.yyyy"
+              [matDatepicker]="endPicker"
+              [max]="limits.maxEndDate"
+              [appCreditTerm]="model.startDate"
+              [minMonths]="limits.minTermMonths"
+              [maxMonths]="limits.maxTermMonths"
+              [(ngModel)]="model.endDate"
+              (ngModelChange)="clearPlan()"
+              #endDate="ngModel"
+              required
+            />
+            <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
+            <mat-datepicker #endPicker [startAt]="model.startDate" />
+            @if (endDate.hasError('matDatepickerParse')) {
+              <mat-error>Enter a date as dd.MM.yyyy.</mat-error>
+            } @else if (endDate.hasError('required')) {
+              <mat-error>End date is required.</mat-error>
+            } @else if (endDate.hasError('matDatepickerMax')) {
+              <mat-error>End date must be on or before 31.12.2200.</mat-error>
+            } @else if (endDate.hasError('endNotAfterStart')) {
+              <mat-error>End date must be after the start date.</mat-error>
+            } @else if (endDate.hasError('wholeMonths')) {
+              <mat-error>
+                End date must be a whole number of months after the start date, on the same day of
+                the month.
+              </mat-error>
+            } @else if (endDate.hasError('termRange')) {
+              <mat-error>
+                The term must be between {{ limits.minTermMonths }} and
+                {{ limits.maxTermMonths }} months.
+              </mat-error>
+            } @else if (endDate.hasError('server')) {
+              <mat-error>{{ endDate.getError('server') }}</mat-error>
+            }
+          </mat-form-field>
+
+          <mat-checkbox
+            class="wide"
+            name="hasCollateral"
+            [(ngModel)]="model.hasCollateral"
+            (ngModelChange)="onCollateralChange($event)"
+          >
+            Secured by collateral
+          </mat-checkbox>
+
+          @if (model.hasCollateral) {
+            <mat-form-field>
+              <mat-label>Collateral value</mat-label>
+              <input
+                matInput
+                type="number"
+                name="collateralValue"
+                [(ngModel)]="model.collateralValue"
+                (ngModelChange)="clearPlan()"
+                #collateralValue="ngModel"
+                required
+                [min]="limits.minAmount"
+                [max]="limits.maxCollateralValue"
+                [appMaxDecimals]="limits.maxAmountDecimals"
+              />
+              @if (collateralValue.hasError('required')) {
+                <mat-error>Collateral value is required.</mat-error>
+              } @else if (collateralValue.hasError('min')) {
+                <mat-error>Collateral value must be greater than zero.</mat-error>
+              } @else if (collateralValue.hasError('max')) {
+                <mat-error
+                  >Collateral value must be at most {{ limits.maxCollateralValue }}.</mat-error
+                >
+              } @else if (collateralValue.hasError('maxDecimals')) {
+                <mat-error>
+                  Collateral value may have at most {{ limits.maxAmountDecimals }} decimals.
+                </mat-error>
+              } @else if (collateralValue.hasError('server')) {
+                <mat-error>{{ collateralValue.getError('server') }}</mat-error>
+              }
+            </mat-form-field>
+
+            <mat-form-field class="wide">
+              <mat-label>Collateral description</mat-label>
+              <textarea
+                matInput
+                name="collateralDescription"
+                rows="3"
+                [(ngModel)]="model.collateralDescription"
+                (ngModelChange)="clearPlan()"
+                #collateralDescription="ngModel"
+                required
+                appNotBlank
+                [maxlength]="limits.maxCollateralDescription"
+              ></textarea>
+              <mat-hint align="end">
+                {{ model.collateralDescription.length }}/{{ limits.maxCollateralDescription }}
+              </mat-hint>
+              @if (
+                collateralDescription.hasError('required') ||
+                collateralDescription.hasError('notBlank')
+              ) {
+                <mat-error>Collateral description is required.</mat-error>
+              } @else if (collateralDescription.hasError('maxlength')) {
+                <mat-error>
+                  Collateral description must be at most
+                  {{ limits.maxCollateralDescription }} characters.
+                </mat-error>
+              } @else if (collateralDescription.hasError('server')) {
+                <mat-error>{{ collateralDescription.getError('server') }}</mat-error>
+              }
+            </mat-form-field>
+          }
+        </div>
+
+        <div class="calculate">
+          <button
+            mat-stroked-button
+            type="button"
+            class="calculate-button"
+            [disabled]="!canCalculate(form) || calculating() || saving()"
+            (click)="calculate(form)"
+          >
+            <mat-icon>calculate</mat-icon>
+            Calculate
+          </button>
+          @if (calculating()) {
+            <mat-progress-bar mode="indeterminate" class="calculating" />
+          }
+        </div>
+
+        @if (plan(); as plan) {
+          <app-payment-plan [plan]="plan" [currency]="model.currency!" />
+        } @else {
+          <p class="hint">Press Calculate to see the payment plan. Save is available after that.</p>
+        }
+      </mat-card-content>
+
+      <mat-card-actions class="actions">
+        <a mat-button [routerLink]="isEdit ? ['/credits', creditId] : ['/credits']">Cancel</a>
+        <span class="spacer"></span>
+        <button
+          mat-flat-button
+          type="submit"
+          [disabled]="form.invalid || plan() === null || saving() || calculating()"
+        >
+          Save
+        </button>
+      </mat-card-actions>
+    </form>
+  }
+</mat-card>

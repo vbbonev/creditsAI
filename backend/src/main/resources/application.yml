@@ -67,3 +67,12 @@ app:
       interval: 1h
       # Only files older than this are touched or reported (protects uploads/deletes in progress)
       min-age: 15m
+  credits:
+    # Input limits for credits: principal, annual rate in percent (0 allowed) and term in months
+    max-amount: 100000000
+    max-interest-rate: 100
+    min-term-months: 1
+    max-term-months: 480
+    # Date bounds keep absurd dates out of the calculation
+    min-start-date: 1900-01-01
+    max-end-date: 2200-12-31

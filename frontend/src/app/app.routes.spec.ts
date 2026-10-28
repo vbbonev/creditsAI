@@ -7,6 +7,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import Keycloak from 'keycloak-js';
 import { routes } from './app.routes';
 import { AuthService } from './core/auth/auth.service';
+import { provideMaterialDefaults } from './core/material/material.config';
 
 describe('app routes', () => {
   let harness: RouterTestingHarness;
@@ -19,6 +20,7 @@ describe('app routes', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
+        provideMaterialDefaults(),
         // the client pages load data; requests stay pending in these routing tests
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -45,6 +47,8 @@ describe('app routes', () => {
       ['/clients', 'Clients · creditsAI'],
       ['/clients/1', 'Client · creditsAI'],
       ['/credits', 'Credits · creditsAI'],
+      ['/credits/new', 'New credit · creditsAI'],
+      ['/credits/1', 'Credit · creditsAI'],
     ])('should lazy-load %s inside the shell', async (url, title) => {
       await harness.navigateByUrl(url);
       expect(harness.fixture.nativeElement.querySelector('mat-toolbar')).not.toBeNull();
