@@ -38,6 +38,8 @@
           <dd>{{ client.archivedAt | date: 'medium' }}</dd>
         }
       </dl>
+
+      <app-client-attachments [clientId]="client.id" />
     </mat-card-content>
 
     <mat-card-actions class="actions">

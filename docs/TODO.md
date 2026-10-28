@@ -1,6 +1,6 @@
 # TODO — next session
 
-_Last updated: 2026-10-26. Backend skeleton and infrastructure (everything in Docker, one mode) are done; no domain entities yet._
+_Last updated: 2026-10-28. Infrastructure, backend skeleton, the Client feature (backend + frontend) and client attachments are done. Next: Credit (fields still to be decided)._
 
 ## Before starting (user)
 - [ ] `git add -A` and commit the AI setup as its own commit (the index still holds older staged versions)
@@ -26,6 +26,19 @@ _Last updated: 2026-10-26. Backend skeleton and infrastructure (everything in Do
 - [ ] **Credit fields:** amount, currency, interest rate, term, start date, type?
 - [ ] **Credit statuses:** which ones define an "active credit" (e.g. `ACTIVE`, `PAID_OFF`, `CLOSED`)? Can an active credit itself be archived?
 - [x] **Archived records:** ADMIN can view (`GET /api/clients?archived=true`, and by id), edit and restore (`POST /api/clients/{id}/restore`) them; USER gets 403 on the list and 404 by id. Archive/restore rules live in the entity (decided 2026-10-27)
+- [x] **Client attachments** (decided 2026-10-28):
+  - Files live on disk in the `attachments-data` volume, under `/data/attachments/{clientId}/{name}`, not as BLOBs.
+  - Names are stored in lower case. A duplicate name in the same client is rejected (409).
+  - Allowed types: PDF, DOCX, XLSX, ODT, TXT, JPEG, PNG, GIF, WEBP, HEIC, TIFF. They are checked by content.
+  - Limits (`app.attachments`): 5 MB per file, 20 MB and 30 files per client.
+  - A USER attaches files only in the multipart create. After that only ADMIN adds or deletes, and an archived client's attachments are ADMIN-only.
+  - Attachments are physically deleted, the one exception to soft delete.
+  - Picture preview for JPEG/PNG/GIF/WEBP.
+  - Hourly cleanup job: it deletes stale `.deleted-*`/`.upload-*.tmp` files and only reports orphans.
+- [ ] **Attachments, small open choices:**
+  - Should the 409 quote the uploaded name instead of the stored lower-case one?
+  - The 413 for more than 32 multipart parts talks about size limits.
+  - Keep or remove the Download icon now that clicking the file name downloads?
 - [x] **Paging:** max page size 100 (`spring.data.web.pageable.max-page-size`), sort only by an allow-list per resource (unknown field → 400) (decided 2026-10-27)
 - [ ] **Business logic:** comes later, one feature at a time (good candidates for Strategy/Factory)
 
@@ -43,15 +56,21 @@ _Last updated: 2026-10-26. Backend skeleton and infrastructure (everything in Do
    - [ ] optional: Keycloak in production mode (`start` instead of `start-dev`) with a realm import without the test users
    - [ ] optional: `KC_PROXY_TRUSTED_ADDRESSES` = the compose subnet for Keycloak
    - [x] `nginx.conf` security headers (from the frontend security review, 2026-10-26; Angular `inlineCritical` turned off so the CSP needs no inline script): CSP `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'` on the SPA location only (not on `/auth/`, Keycloak sends its own and its login-status iframe must load), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-cache` for `index.html`, `server_tokens off`, never log `$http_authorization`
+   - [x] attachments volume `attachments-data`: mounted only into backend, `/data/attachments` is `app:app 0750`, files 0640 (a named volume can't be mounted `noexec`), nginx `/api/` has `client_max_body_size 21m`, CSP `img-src blob:` (2026-10-28)
    - [ ] at the next realm re-import (ask first, needs realm delete or volume reset): `post.logout.redirect.uris` → exactly `http://localhost/`, and `"bruteForceProtected": true`
-2. [~] **Module 2–4, Backend:** ~~Spring Boot skeleton, security config, error handling, `azp` restriction~~ done (30 tests; Spring profiles and CORS properties removed 2026-10-26). ~~Client resource~~ done 2026-10-27 (104 tests, security review OK, its 2 Medium findings fixed). Next: `/new-endpoint Credit` once the fields are decided (then add the "active credit blocks archiving" check to `Client.archive()`)
-3. [~] **Module 5, Frontend:** ~~Angular 22 + Material skeleton and theme~~ done; ~~keycloak-angular 22 (login-required + PKCE, bearer token only for `/api`, `AuthService.isAdmin()`, `adminGuard`)~~ done, not yet tried in a browser (2026-10-26, 23 specs). Credits get their own list, not nested under a client (decided 2026-10-26). Fonts self-hosted (no Google Fonts). Docker + nginx done. ~~Layout shell~~ done (2026-10-26, 36 specs): top horizontal menu (Clients, Credits) in a `mat-toolbar`, no sidenav (user's choice); username, admin icon, logout; `/` → `/clients`; not-found page; placeholder list pages. Next: the clients and credits features
+2. [~] **Module 2–4, Backend:** ~~Spring Boot skeleton, security config, error handling, `azp` restriction~~ done (30 tests; Spring profiles and CORS properties removed 2026-10-26). ~~Client resource~~ done 2026-10-27 (104 tests, security review OK, its 2 Medium findings fixed). ~~Client attachments~~ done 2026-10-28 (288 tests). The security review found 1 High (Tika temp copies) and 1 Medium (delete/re-upload race), plus 3 Low; all are fixed. Changesets 002–004 and a cleanup job were added. Untested: the HALT path of changeset 004 against mixed-case rows. Next: `/new-endpoint Credit` once the fields are decided (then add the "active credit blocks archiving" check to `Client.archive()`)
+3. [~] **Module 5, Frontend:** ~~Angular 22 + Material skeleton and theme~~ done; ~~keycloak-angular 22 (login-required + PKCE, bearer token only for `/api`, `AuthService.isAdmin()`, `adminGuard`)~~ done, not yet tried in a browser (2026-10-26, 23 specs). Credits get their own list, not nested under a client (decided 2026-10-26). Fonts self-hosted (no Google Fonts). Docker + nginx done. ~~Layout shell~~ done (2026-10-26, 36 specs): top horizontal menu (Clients, Credits) in a `mat-toolbar`, no sidenav (user's choice); username, admin icon, logout; `/` → `/clients`; not-found page; placeholder list pages. ~~Clients feature~~ done 2026-10-27 (list/search, form dialog, detail page). ~~Client attachments UI~~ done 2026-10-28 (183 specs): files in the create dialog, a Files section on the detail page, thumbnails and a preview dialog, and the file name click downloads. **Not yet checked in a browser.** Next: the credits feature
+   - [ ] The build warns that the initial bundle is 570 kB, over the 500 kB budget (vendor chunks). Decide whether to raise the budget or trim the bundle
 4. [ ] **Module 6, Testing:** Testcontainers integration tests, frontend specs
    - [ ] E2E tests: Cypress or Playwright (undecided, user decides later). Cypress: interactive runner, good for demos, Keycloak login on the same origin works with `cy.session()`. Playwright: the same tool as the planned Playwright MCP (item 5), faster parallel runs, WebKit. Open questions: test data (nothing is deleted, so use unique names per test or a throwaway compose stack), run against the Docker stack on `http://localhost` (not `ng serve`), location (`frontend/cypress/` vs a top-level `e2e/`). Start with one smoke test (login, then the shell loads) and add scenarios per feature: no edit/archive for USER, ADMIN archive with the confirm dialog, the 409 active-credit message, a 400 mapped onto form fields
 5. [ ] Re-add the Playwright MCP (`.mcp.json`) once the UI exists, for screenshots
 6. [ ] Run `/exam-log` after each module. Write the Google Doc from `docs/ai-log.md` and `docs/prompts.log`
 
 ## Report material collected so far
+- Security review value (attachments): it caught an unclosed `TikaInputStream` that left a full copy of every DOCX/XLSX in `/tmp`, so a disk could fill and deleted files survived. It also caught a delete-after-commit race that could wipe a re-uploaded file with the same name. Both were invisible to the functional tests.
+- Hook vs. a user decision: the `protect-files.sh` hook blocks `repository.delete*`, but the user chose physical deletion for attachments. It was solved through `orphanRemoval` in the `Client` aggregate and documented as the one exception, not by weakening the hook.
+- Iterative design: duplicate names were first case-sensitive, then case-insensitive with a functional index, then lowercase-only with a plain unique constraint. Each step was one changeset, never an edit to an old one.
+- Housekeeping: during cleanup, two integration tests turned out to leave a temp storage folder after every run (38 folders) → fixed with `@AfterAll`.
 - Challenge: the compose healthcheck using bash `/dev/tcp` worked for Keycloak but not for the backend, because `CMD-SHELL` runs `/bin/sh`, which is `dash` in the Temurin image. Fixed by calling bash explicitly. Found only by actually running the full stack.
 - Design discussion: a custom domain + network alias would give a single Keycloak URL, but would make local testing harder for others (the user's point). Kept plain localhost with the issuer/JWKS split and nginx as the single entry point.
 - Challenge: start.spring.io no longer offered Boot 3.5, so the planned version was outdated. Moved to Boot 4.1, where test annotations moved packages (`org.springframework.boot.webmvc.test...`).

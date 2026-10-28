@@ -515,3 +515,424 @@ active and archived together, defaults are OK
 <status>completed</status>
 <summary>Background command "Run backend tests in background" completed (exit code 0)</summary>
 </task-notification>
+
+--- 2026-10-28 09:44:55
+/exam-log
+
+--- 2026-10-28 09:51:43
+let's add the possibility to attach file to the Client. Possible files are documents and differnet types of pictures. The files need to be saved in the file system not as BLOB in DB. There must be limits for the attachments - 1 file max 5MB, all files attached to a client - max 20MB
+
+--- 2026-10-28 10:08:48
+1. use the proposed file types. The backend should check the actual file content; 2. User can upload attachments to a new client but not to a existung client. The idea is that if a client is already saved (existing), only admin can make change to it incl. attachments. Every logged in user can download attachments; 3. removed attachments are deleted phisically; 4. yes (but only admin can do it); 5.Docker named volume is ok for storage. It is good this volume not to have execute rights (if somebody uploads 'bad thinks'). We can use folder per client (uisng client id) and real names of files; 6 the limits are configurable ina application.yml. let's fix a max number of files per client to 30; 7 A section on the client detail/edit page. Let the pictures have preview
+
+--- 2026-10-28 10:17:11
+<agent-message from="a4554b2d45d3dbe72">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  Client file attachments are implemented in the frontend. `npm --prefix frontend test -- --watch=false` passes (26 files, 181 tests, Node 22). `npm --prefix frontend run build` succeeds. The build prints a warning that the initial bundle is 570.70 kB against the 500 kB budget. All new code is in the lazy clients chunk, so it isn't the cause. I did not run `git add` or `git commit`, and I touched no nginx or Docker files. Prettier also reformatted `core/layout/shell/shell.html` and `auth-unavailable/auth-unavailable.html`, and I reverted both.
+  
+  **Routes and endpoints:** no new routes. The attachments section sits on the existing `/clients/:id` detail page.
+  - `POST /api/clients` as multipart, `GET /api/clients/{id}/attachments`, `GET .../attachments/{aid}/content` (blob), `POST .../attachments` and `DELETE .../attachments/{aid}`.
+  
+  **Added (all under `/Users/vbb/IdeaProjects/creditsAI/frontend/src/app/`):**
+  - `features/clients/attachment.constants.ts` is the single constants file. It holds 5 MB per file, 20 MB total, 30 files, the allowed extensions and MIME types, the `accept` string and the previewable MIME types.
+  - `features/clients/attachment.model.ts` holds the `Attachment` interface. It matches the contract fields exactly.
+  - `features/clients/attachment.validation.ts` and its spec contain `validateFiles(files, existing)`, `isAllowedType`, `isPreviewable` and `fileIcon`.
+  - `features/clients/client-attachments/` is the attachments component (ts, html, scss, spec).
+  - `features/clients/attachment-preview-dialog/` is the larger-picture dialog (ts, html, scss, spec).
+  - `shared/pipes/file-size.pipe.ts` and its spec contain a `fileSize` pipe and `formatFileSize`. It shows sizes like "1.5 KB".
+  
+  **Changed:**
+  - `client.service.ts` and its spec gain `createWithFiles(request, files)`, `listAttachments`, `downloadAttachment`, `uploadAttachments` and `deleteAttachment`. The old JSON `create()` is kept but no longer used by the form.
+  - `client-form.ts`, `.html`, `.scss` and `.spec.ts`: in create mode the form now always sends multipart.
+  - `client-detail.ts`, `.html` and `.spec.ts` embed `<app-client-attachments [clientId]>`.
+  
+  **UI behavior:**
+  - **Create dialog:** an optional "Attach files" button with an `accept` filter, a list of the chosen files with a remove button on each, and the limits as a hint. Problems appear as a red list and Create stays disabled until they are fixed. The edit dialog has no file picker. Edit is ADMIN-only and attachments are managed on the detail page, so I did not reuse the component there.
+  - **Detail page, everyone:** the list shows the file type icon, name, size, uploader and upload time, plus a Download button. Download fetches a blob through `HttpClient`, makes a temporary object URL, triggers a save, and revokes the URL straight away. There is no plain link to the API.
+  - **Detail page, ADMIN only:** an Upload button and a Delete button per row. Upload validates against the current list (limits, duplicates, types) and sends immediately only if valid. Otherwise it shows the error list and sends nothing. Delete opens the confirm dialog saying the file "will be permanently deleted. This cannot be undone." and removes the row on success.
+  - **Pictures:** JPEG, PNG, GIF and WEBP show a thumbnail, and clicking it opens a larger preview in a MatDialog. HEIC, TIFF and documents show an icon and Download only. Thumbnail URLs are revoked when a file is deleted and when the component is destroyed.
+  - **Errors:** server errors (413, 409, 400, 415) are not handled in the components. The interceptor shows them, and the components only re-enable their buttons. Success snackbars come from `NotificationService`.
+  - **Archived clients:** the UI changes nothing. The backend enforces the ADMIN-only rule, and admin upload and delete stay visible on an archived client.
+  
+  **Choices to check:**
+  - Duplicate file names are compared case-insensitively on the frontend. If the backend is case-sensitive, this is stricter than needed and only affects UX.
+  - Selecting files in the create form accumulates them across picks, and Create stays blocked until any invalid file is removed.
+  - TIFF is accepted as both `.tiff` and `.tif`.
+  - I added no admin-upload path to the edit dialog.
+  
+  **Tests:**
+  - **Service:** multipart body shape (JSON `client` part with type `application/json`, repeated `files` parts), list, blob download, upload and delete.
+  - **Validation:** types, 5 MB boundary, duplicates, 30-file limit, 20 MB total including existing files, preview rules and icons.
+  - **Attachments component:** USER vs ADMIN visibility, download, upload, validation blocking, delete confirm text, thumbnails and preview, and URL revocation on delete and destroy.
+  - **Create form:** the file picker, files sent with the request, and submit blocked for a bad type, a file over 5 MB, duplicates and more than 30 files. The edit form is checked to have no picker.
+</agent-message>
+
+--- 2026-10-28 10:28:18
+<agent-message from="a4aef6342abcacf5d">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  Client file attachments are implemented in `backend/` as you specified, with two deviations (OOXML detection, `HttpStatus.CONTENT_TOO_LARGE` for 413), covered below. `backend/mvnw -f backend/pom.xml test` passes: 241 tests, 0 failures, BUILD SUCCESS. Docker/compose/nginx were not touched, and I ran no git add/commit.
+  
+  ## Tika artifacts and the OOXML deviation
+  - **Only `org.apache.tika:tika-core:3.3.3`** (new `tika.version` property in `pom.xml`).
+  - **What tika-core can and cannot detect.** It identifies PDF, ODT (via its `mimetype` entry), TXT, JPEG, PNG, GIF, WEBP, HEIC and TIFF from magic bytes. It reports DOCX and XLSX only as a generic `application/zip`. I confirmed this with real tests that failed.
+  - **Why not the Tika OOXML detector.** It lives in `tika-parser-microsoft-module`, which pulls in POI, jackcess, BouncyCastle and html/xml/text parsers. `tika-parser-zip-commons` does not help; I tried it and removed it.
+  - **My workaround.** `storage/OoxmlInspector` uses only the JDK. For a zip result it reads `[Content_Types].xml` (max 256 KB, StAX with DTD/external entities disabled). It accepts DOCX only if `/word/document.xml` is declared with the Word main content type and the part exists, and XLSX likewise for `/xl/workbook.xml`. Macro and template variants and plain zips are rejected.
+  - **Your call:** if you want pure Tika, swap in `tika-parser-microsoft-module` (heavy). Otherwise keep this.
+  - The file name is never passed to Tika, so the extension cannot influence detection.
+  
+  ## Files created (all under `/Users/vbb/IdeaProjects/creditsAI/backend/`)
+  Main, under `src/main/java/com/creditsai/`:
+  - `config/AttachmentProperties.java` (record bound to `app.attachments`, enabled with `@ConfigurationPropertiesScan` on `BackendApplication`)
+  - `storage/AllowedFileType.java`, `FileNameSanitizer.java`, `FileTypeDetector.java`, `OoxmlInspector.java`, `AttachmentStorage.java`, `FileSystemAttachmentStorage.java`
+  - `model/ClientAttachment.java`
+  - `dto/AttachmentResponse.java`, `AttachmentUpload.java`, `AttachmentDownload.java`
+  - `mapper/AttachmentMapper.java`
+  - `service/AttachmentService.java`, `service/impl/AttachmentServiceImpl.java`, `service/impl/AttachmentIngestor.java` (the upload flow shared by client create and admin add)
+  - `controller/AttachmentController.java`, `controller/ClientAuthentication.java` (static helpers: isAdmin, `preferred_username`, MultipartFile to DTO)
+  - `exception/PayloadTooLargeException.java`, `UnsupportedFileTypeException.java`, `AttachmentStorageException.java`
+  - `src/main/resources/db/changelog/changes/002-create-client-attachments.sql`
+  
+  Tests, under `src/test/java/com/creditsai/`:
+  - `storage/SampleFiles`, `FileTypeDetectorTest`, `FileNameSanitizerTest`, `FileSystemAttachmentStorageTest`
+  - `model/ClientAttachmentRulesTest`
+  - `service/impl/AttachmentServiceImplTest`
+  - `controller/AttachmentControllerTest`, `ClientMultipartCreateTest`
+  - `AttachmentApiIntegrationTest` (Testcontainers)
+  - `AttachmentUploadLimitsHttpTest` (real Tomcat, RANDOM_PORT)
+  
+  ## Files changed
+  - `pom.xml`
+  - `src/main/resources/application.yml`
+  - `BackendApplication.java`
+  - `model/Client.java`
+  - `repository/ClientRepository.java`
+  - `mapper/ClientMapper.java`
+  - `service/ClientService.java` and `service/impl/ClientServiceImpl.java`
+  - `controller/ClientController.java`
+  - `exception/GlobalExceptionHandler.java`
+  - `ClientServiceImplTest` (new constructor argument plus 2 tests) and `ClientRepositoryTest` (3 tests)
+  
+  ## Final API
+  | Method and path | Role | Result |
+  |---|---|---|
+  | `POST /api/clients` as `multipart/form-data` | USER or ADMIN | Part `client` (JSON `ClientRequest`, `@Valid`) plus 0..n parts `files`. Returns 201, a `Location` header and a `ClientResponse`. All or nothing. |
+  | `POST /api/clients` as JSON | USER or ADMIN | Unchanged. |
+  | `GET /api/clients/{id}/attachments` | USER or ADMIN | 200 with `List<AttachmentResponse>` sorted by fileName (case-insensitive). USER gets 404 if the client is archived. |
+  | `GET /api/clients/{id}/attachments/{attId}/content` | USER or ADMIN | 200, streamed. USER gets 404 if the client is archived. |
+  | `POST /api/clients/{id}/attachments` | ADMIN | Multipart parts `files`. Returns 201 with the created list. |
+  | `DELETE /api/clients/{id}/attachments/{attId}` | ADMIN | 204. Removes the row and the file. |
+  
+  - **Archived clients:** ADMIN can still list, download, add and delete.
+  - **Attachment under the wrong client:** 404 `Attachment {id} was not found.`
+  - **`AttachmentResponse`:** `id, fileName, contentType, sizeBytes, uploadedBy, uploadedAt`. `uploadedBy` is `preferred_username`, falling back to the authentication name.
+  - **Download headers:**
+    - `Content-Type` is the stored detected type.
+    - `Content-Length` is set.
+    - `Content-Disposition: attachment; filename="<ascii fallback>"; filename*=UTF-8''<percent-encoded>` (Spring emits both).
+    - `X-Content-Type-Options: nosniff`.
+    - `Cache-Control: no-store, private`.
+  
+  ## Error responses (ProblemDetail, `detail` is the message)
+  | Status | Cause | Message |
+  |---|---|---|
+  | 400 | Bad file name | `An uploaded file has no name.` / `An uploaded file has no valid name.` / `A file name must not contain control characters.` / `A file name must be at most 255 bytes long.` |
+  | 400 | Empty file | `File 'X' is empty.` |
+  | 400 | Invalid `client` part | Field errors in `errors`, as for the JSON create. |
+  | 413 | File over 5 MB | `File 'X' is larger than the maximum allowed size of 5 MB.` |
+  | 413 | Container multipart limit hit (`MaxUploadSizeExceededException`) | `The upload is too large. A single file may be at most 5 MB and all files of a client together at most 20 MB.` |
+  | 415 | Type not allowed | `File 'X' has an unsupported type. Allowed types: PDF, DOCX, XLSX, ODT, TXT, JPEG, PNG, GIF, WEBP, HEIC, TIFF.` |
+  | 415 | Content does not match extension | `The content of file 'X' is a PNG file, which does not match its extension '.pdf'.` |
+  | 409 | Duplicate name (also within one batch) | `A file named 'X' already exists for this client.` |
+  | 409 | Too many files | `A client can have at most 30 files.` |
+  | 409 | Total size exceeded | `All files of a client together may take at most 20 MB. This client already uses N MB.` |
+  
+  Storage I/O failures return the generic 500 with no paths. The 413 text in the handler hardcodes "5 MB / 20 MB" (it can't see the config).
+  
+  ## application.yml keys
+  ```
+  spring.servlet.multipart.max-file-size: 5MB
+  spring.servlet.multipart.max-request-size: 21MB
+  app.attachments.storage-dir: /data/attachments
+  app.attachments.max-file-size: 5MB
+  app.attachments.max-total-size: 20MB
+  app.attachments.max-files: 30
+  ```
+  Defaults on `AttachmentProperties` are the same. The storage directory is created lazily on first write, so tests and startup don't need `/data`.
+  
+  ## Design details
+  - **Entity rules:**
+    - `Client` owns `@OneToMany(mappedBy, cascade = ALL, orphanRemoval = true) attachments`.
+    - `Client.ensureCanAttach`, `addAttachment` and `removeAttachment` enforce unique name, count and total size.
+    - The collection is exposed read-only.
+    - No `repository.delete*` and no `DELETE FROM` in `src/main`, and the hook was not touched.
+  - **Locking:** `ClientRepository.findByIdForUpdate` is JPQL with `@Lock(PESSIMISTIC_WRITE)`. A test with 6 parallel 5 MB uploads gives exactly 4 successes and 2 conflicts.
+  - **Create flow:** the client is saved first to get its id (the folder name). A rejected file throws, and the rollback removes the row and the files already written (`TransactionSynchronization.afterCompletion`).
+  - **Storage:**
+    - Each file is written to `.upload-*.tmp` with 0640 (folders 0750 on POSIX), then moved with `ATOMIC_MOVE`.
+    - It deliberately does not use `Files.copy`, which would reset the permissions. The final path is checked to stay inside the client folder.
+    - Deletes run `afterCommit`.
+    - Empty client folders are left in place on rollback and delete, to avoid racing a parallel upload.
+  - **Mapping:** `ClientMapper` now ignores `attachments` explicitly. `ClientServiceImpl` takes a new `AttachmentIngestor` constructor argument.
+  - **Extra package:** I added `com.creditsai.storage` for the non-layer helpers, which is not in the layering diagram of `backend/CLAUDE.md`.
+  
+  ## Choices not in your spec
+  - Empty (0-byte) files are rejected with 400.
+  - Name uniqueness is case-sensitive, as in the DB constraint. Case-insensitive file systems would reject `A.txt` after `a.txt` with a storage error.
+  - The extra `idx_..._client_id` index was omitted because the `UNIQUE (client_id, file_name)` constraint already indexes `client_id`. The changeset says so.
+  - HEIC accepts only `image/heic` with extension `.heic`. `.heif` and `image/heif` are not accepted.
+  - Extensions accepted: jpg or jpeg, tif or tiff.
+  
+  ## Infrastructure and security notes for you
+  - **nginx:** `/api/` needs `client_max_body_size` of about 22m. The default 1m would cut uploads off before they reach the backend.
+  - **Docker volume:** the volume must be writable by the backend container user, and `/data/attachments` is the default path.
+  - **413 over plain HTTP:** a Tomcat 413 for an oversized body closes the connection. The JDK `HttpClient` fails to parse that response; `HttpURLConnection` (and presumably browsers) read it. `AttachmentUploadLimitsHttpTest` therefore uses `SimpleClientHttpRequestFactory`.
+  - **31 file parts:** Tomcat accepts them, and the business rule answers 409 (tested over real HTTP).
+  - **Security review:** this touches controllers, uploads and file paths, so please run `security-reviewer`.
+  
+  ## Test results
+  - **Totals:** 241 run, 0 failures, 0 errors.
+  - **New classes:** `FileTypeDetectorTest` 17, `FileNameSanitizerTest` 21, `FileSystemAttachmentStorageTest` 12, `ClientAttachmentRulesTest` 10, `AttachmentServiceImplTest` 21, `AttachmentControllerTest` 15, `ClientMultipartCreateTest` 7, `AttachmentApiIntegrationTest` 17, `AttachmentUploadLimitsHttpTest` 5.
+  - **Extended classes:** `ClientServiceImplTest` (21 total) and `ClientRepositoryTest` (3 new).
+  
+  ## Leftovers to clean up
+  - Scratchpad dir `/private/tmp/claude-501/-Users-vbb-IdeaProjects-creditsAI/4ae3da67-6929-4ed6-b965-399c313bfc3c/scratchpad/x` (the `tika-mimetypes.xml` I extracted). I did not delete it; say if you want it removed.
+  - Test runs create temp folders named `attachments-it*` and `attachments-http*` in the system temp directory (the OS temp area, not the project folder).
+</agent-message>
+
+--- 2026-10-28 10:30:39
+<agent-message from="a810fb4278157f2ce">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  ## Security review: client attachments (uncommitted changes)
+  
+  I found one High issue. Everything else is Medium/Low or fine. Paths are under `/Users/vbb/IdeaProjects/creditsAI/backend/src/main/java/com/creditsai/` unless stated otherwise.
+  
+  | Severity | File:line | Issue | Fix |
+  |---|---|---|---|
+  | **High** | `storage/FileTypeDetector.java:40-43` | `TikaInputStream.get(content)` is never closed (the Javadoc says "read but not closed"). Calling `stream.getPath()` copies the whole upload into a temp file in `java.io.tmpdir`. That temp file belongs to the TikaInputStream's `TemporaryResources` and is only deleted when the TikaInputStream itself is closed. The caller (`AttachmentIngestor.java:114`) closes only the inner multipart stream. So every zip-type upload leaves a full copy (up to 5 MB) in `/tmp` of the container: every DOCX/XLSX, and also rejected zips. Two impacts: (a) any USER can fill the disk with unlimited repeated `POST /api/clients` multipart requests (even rejected ones leak); (b) copies of confidential files stay on disk after an ADMIN deletes the attachment, outside the 0750 volume. | Open it in try-with-resources and let it close the wrapped stream (the caller's second close does nothing): `try (TikaInputStream stream = TikaInputStream.get(content)) { ... }`. Or pass `new TemporaryResources()` and close that in `finally`. Add a test that counts files in `java.io.tmpdir` before and after a DOCX upload. |
+  | Medium | `storage/FileSystemAttachmentStorage.java:56-65` and `:89-96` | Check-then-act on the disk path. The `Files.exists` check is followed by `Files.move(..., ATOMIC_MOVE)`, which silently replaces an existing target on Linux (rename(2)). The delete is also deferred to `afterCommit`. Sequence: ADMIN A deletes `x.pdf`, commits and releases the row lock. ADMIN B, waiting on the lock, uploads a new `x.pdf`. Then A's `afterCommit` runs and deletes B's new file, or B gets a generic 500 because the old file still exists. Result: a DB row with missing content (`download` returns 404 "content not available"). Uploads to the same client are otherwise correctly serialized by `findByIdForUpdate`. | Store files under a server-generated name, e.g. `{clientId}/{attachmentId or UUID}`, and keep the real sanitized name only in the DB and `Content-Disposition`. This removes the name collision, all name tricks on disk, and the race. If real names on disk must stay (as required), delete with `Files.delete` *before* commit inside the lock, and/or move with `Files.move` without `REPLACE_EXISTING` / non-atomic so an existing target fails. Also map a leftover-file conflict to 409, not 500. |
+  | Low | `storage/FileNameSanitizer.java:37` | `Character.isISOControl` rejects only category Cc. Unicode format characters (Cf) still pass and end up in the stored name, the UI and `Content-Disposition`: bidi overrides U+202A-202E and U+2066-2069, zero-width U+200B-200D, U+FEFF. Example: `invoice‮fdp.png` displays as `invoicepng.pdf`. The content and extension check still holds, so the impact is visual spoofing only. | Also reject `Character.getType(c) == Character.FORMAT` (and optionally line/paragraph separators U+2028/2029). |
+  | Low | `controller/AttachmentController.java:70-78` | The download response has `attachment` + `nosniff` + `no-store`, which is good. `/api/` does not get the SPA security headers, though. Inline rendering is not reachable today, because a top-level navigation carries no bearer token. As defense in depth for PDF/TXT polyglots, the response could set its own CSP. | Add `.header("Content-Security-Policy", "sandbox; default-src 'none'")` on the download response. |
+  | Low | `controller/AttachmentController.java:91-92` | `add` takes an unbounded `List<MultipartFile>`. It is effectively capped by Tomcat's default part count (Boot `server.tomcat.max-part-count`, default 50) and `max-request-size: 21MB`, and per file by `ensureCanAttach`. So this is not exploitable, but the cap is implicit. | Optionally set `server.tomcat.max-part-count` explicitly (e.g. 32) in `application.yml` so the limit is documented next to the others. |
+  
+  ### Areas checked and found OK
+  - **Role checks**: every endpoint has `@PreAuthorize`. Add and delete are `hasRole('ADMIN')`. List and download are `hasAnyRole('USER','ADMIN')`. Multipart create is `hasAnyRole('USER','ADMIN')`, which is the only way a USER can attach files. That matches the requirements and the table in `backend/CLAUDE.md`.
+  - **IDOR**: attachments are looked up only through the owning client's collection (`Client.findAttachment`), so an attachment of another client gives 404. For a USER, archived clients go through `findByIdAndArchivedFalse`, so list and download return 404. Admin add and delete on archived clients is allowed, and is ADMIN-only.
+  - **Path traversal**: the sanitizer keeps only the last segment after `/` or `\`, applies NFC, rejects `.`, `..`, empty names, control characters (including NUL, CR, LF) and names over 255 bytes. `resolveInside` also checks that the parent equals the client folder. The client folder comes from a `long`. No traversal is possible.
+  - **Content-type spoofing**: the type is detected from the bytes only (Tika, without the file name), checked against an allow-list, and the extension must match. The stored and served Content-Type is the detected one, never the uploader's. SVG and HTML are not allowed. Macro-enabled OOXML is rejected by its main content type.
+  - **OoxmlInspector**: StAX with `SUPPORT_DTD=false` and external entities off blocks XXE and billion-laughs (no Woodstox on the classpath). Only `[Content_Types].xml` is inflated, with a 256 KB cap, so there is no zip bomb. Other entries are never read. Damaged zips are rejected as empty.
+  - **Limits**: 5 MB per file, 20 MB and 30 files per client are checked in the entity before work starts and again on add. Batches with duplicate names are caught. Parallel adds are serialized by a pessimistic row lock. nginx `client_max_body_size 21m` matches `max-request-size: 21MB`. Multipart temp files are cleaned up by the container.
+  - **Content-Disposition**: built with Spring `ContentDisposition` (RFC 5987 encoding). CR/LF cannot reach it because the sanitizer rejects control characters, so there is no header injection.
+  - **Errors**: `AttachmentStorageException` (the only message that contains internal context) falls through to the generic 500. Stack traces are only logged. `deleteQuietly` logs only the file name. User-facing messages echo only the sanitized file name. Oversized uploads get a 413 with a fixed text.
+  - **Permissions**: the Dockerfile creates `/data/attachments` as `app:app 0750`, and the app runs as non-root. Files are written 0640 via a temp file plus atomic move, folders 0750, no execute bits. The volume is mounted only into the backend.
+  - **CSP change**: adding `img-src blob:` is harmless. Blob images go into `<img>` and cannot run script. Previews are limited to JPEG/PNG/GIF/WEBP, and `script-src` is still `'self'`.
+  - **Frontend**: downloads go through `HttpClient` with the bearer token (no plain links), and file names are rendered with Angular interpolation (escaped). Upload and delete are only shown to ADMIN, and the backend enforces it too.
+  - **Secrets/config**: no secrets in the changed files, actuator exposes only `health`, no CORS origins, page size capped at 100. Every repository query is JPQL with named parameters, with no native SQL.
+  
+  Verdict: Fix High issues first.
+</agent-message>
+
+--- 2026-10-28 10:33:24
+<agent-message from="a4aef6342abcacf5d">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  All five review findings are fixed. The full `backend/mvnw -f backend/pom.xml test` run passes: 255 tests, 0 failures, BUILD SUCCESS, up from 241. No git add/commit.
+  
+  1. **HIGH, Tika temp files (`storage/FileTypeDetector.java`).** `TikaInputStream` is now opened in try-with-resources, so the temp copy Tika makes for `getPath()` is deleted. New test `detect_zipBasedUploads_leaveNoTempFilesBehind` counts `apache-tika-*` files in `java.io.tmpdir` before and after 5 rounds each of DOCX, XLSX and a rejected plain zip, and the count is unchanged. About 32 stale `apache-tika-*.tmp` files from my earlier leaking test runs are still in the system temp folder (`/var/folders/.../T`). They are safe to delete, but I did not delete them.
+  
+  2. **MEDIUM, race in `FileSystemAttachmentStorage` (real names kept).**
+     - **Upload:** it now uses plain `Files.move(temp, target)` with no `ATOMIC_MOVE` and no `REPLACE_EXISTING`, so a collision fails instead of replacing. `FileAlreadyExistsException`, and the existing-target check, now throw `BusinessRuleException("A file named 'X' already exists for this client.")`, which becomes a 409. `AttachmentStorage` Javadoc is updated.
+     - **Delete inside a transaction:** the file is renamed at once to a hidden `.deleted-<uuid>` tombstone, still under the client row lock. After commit the tombstone is deleted. After a rollback it is renamed back to the real name. Outside a transaction it is deleted immediately.
+     - **New tests:**
+       - `delete_thenReuploadSameNameInSameTransaction_newFileSurvivesCommit` reproduces delete, then re-upload of the same name, then the first transaction's commit callbacks. The new file survives and no tombstone remains.
+       - `delete_rolledBack_restoresRealNameAndLeavesNoTombstone` covers the rollback path.
+     - **Updated tests:** the duplicate-store test now expects the 409 `BusinessRuleException`. The delete-after-commit test now also asserts that no tombstone is left.
+  
+  3. **LOW, format characters (`FileNameSanitizer`).** It now rejects `Character.FORMAT` characters (bidi overrides, zero-width characters, U+FEFF) and U+2028/U+2029 with a 400: "A file name must not contain invisible or direction-changing characters." The tests are parameterized over 10 such names.
+  
+  4. **LOW, download header.** The download response now sends `Content-Security-Policy: sandbox; default-src 'none'`. `AttachmentControllerTest` asserts it.
+  
+  5. **LOW, part count (`application.yml`).** `server.tomcat.max-part-count: 32` is set with a comment (30 files + client part + margin).
+     - **Result for 31 files (32 parts):** still 409 "A client can have at most 30 files." This is verified over real HTTP.
+     - **Result for 33 parts:** `AttachmentUploadLimitsHttpTest` sends 32 files plus the client part. The response is 413 Content Too Large with the readable problem detail "The upload is too large. A single file may be at most 5 MB and all files of a client together at most 20 MB." The text mentions size limits although the cause is the part count. This comes from the existing `MaxUploadSizeExceededException` handler.
+     - **Your call:** I did not make the 413 wording part-count specific.
+     - **YAML mistake caught:** my first edit put a `tomcat:` block under `resourceserver:` and broke the YAML. It is fixed, and the full suite is green.
+  
+  **Test counts changed:**
+  - `FileNameSanitizerTest`: 21 to 31.
+  - `FileSystemAttachmentStorageTest`: 12 to 14.
+  - `FileTypeDetectorTest`: 17 to 18.
+  - `AttachmentUploadLimitsHttpTest`: 5 to 6.
+  - `AttachmentControllerTest`: 15 (new assertion).
+</agent-message>
+
+--- 2026-10-28 10:39:34
+let's treat A.pdf and a.pdf as the same name both in the FE and BE
+
+--- 2026-10-28 10:41:11
+<agent-message from="a4aef6342abcacf5d">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  File names are now unique per client ignoring case. `backend/mvnw -f backend/pom.xml test` passes with 265 tests, 0 failures, BUILD SUCCESS (255 before this change). No git add/commit.
+  
+  **Code changes**
+  - **`model/Client.java`:**
+    - `ensureCanAttach` and `addAttachment` compare names after NFC normalization and `toLowerCase(Locale.ROOT)`. So `A.pdf` equals `a.pdf`, `Ä.pdf` equals `ä.pdf`, and a composed `Ä.pdf` equals a decomposed `a` + combining diaeresis.
+    - The check covers existing files and files in the same batch.
+    - The 409 message is unchanged and quotes the name as uploaded.
+    - The stored and displayed name stays as uploaded.
+  - **New changeset `003-attachment-file-name-case-insensitive-unique.sql`:** drops `uq_client_attachments_client_file` and creates the unique index `uq_client_attachments_client_file_ci` on `(client_id, lower(file_name))`. The rollback drops the index and re-adds the old constraint. `002` is untouched.
+    - **Database-collation caveat:** Postgres `lower()` follows the database locale. In the test container (postgres:16) it folded `Ä` and `ä`. On a database created with the C locale, non-ASCII case variants would not be caught by the index. The entity check still catches them first.
+  - **`model/ClientAttachment.java`:** only the Javadoc changed. I made no JPQL or derived-query changes, since no query looks up by name.
+  - **Disk safety net:** the plain `Files.move` without replace and its 409 are unchanged.
+  
+  **New tests** (+10 from the previous 255)
+  - **Entity (`ClientAttachmentRulesTest`, 10 to 13 tests):**
+    - `A.pdf` vs `a.pdf`.
+    - `Ä.pdf` vs `ä.pdf`.
+    - Composed vs decomposed forms.
+    - `ensureCanAttach` with a case variant.
+    - The old "different case means different file" test was replaced.
+  - **Service (`AttachmentServiceImplTest`, 21 to 23):**
+    - A case variant inside one batch gives 409 quoting `A.TXT`.
+    - A case variant of an existing name gives 409, and the existing file keeps its real name.
+  - **Integration (`AttachmentApiIntegrationTest`, 17 to 20):**
+    - A second upload with a different case gives 409 and quotes the uploaded name.
+    - Case-variant names in one create batch give 409, and no client or files remain.
+    - Delete, then re-upload with a different case, gives 201, and the file is stored under the new name.
+  - **Repository/DB (`ClientRepositoryTest`, 2 new):**
+    - The unique index rejects a case-variant insert (`Ä.pdf` then `ä.PDF`) with `DataIntegrityViolationException`; the entity rule is bypassed on purpose.
+    - The same name for two different clients is allowed.
+  
+  The macOS dev machine has a case-insensitive file system. My delete-then-reupload test therefore checks the directory listing (`containsExactly("A.txt")`) instead of `exists()` on the other-case path.
+</agent-message>
+
+--- 2026-10-28 10:44:11
+maybe we can save files only in lower case. will this simplify the logic?
+
+--- 2026-10-28 10:46:09
+let's lowercase the names. it will not be problem for the users
+
+--- 2026-10-28 10:48:09
+<agent-message from="a4aef6342abcacf5d">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  Attachment file names are now stored in lower case. `backend/mvnw -f backend/pom.xml test` passes: 267 tests, 0 failures, BUILD SUCCESS (265 before). No git add/commit.
+  
+  **Quoted name in the 409:** the message quotes the stored lower-case name (for example, `REPORT.pdf` gives "A file named 'report.pdf' already exists for this client."). Quoting the uploaded name would need extra plumbing between the entity and the upload flow, so I did not do it. Say if you want it.
+  
+  **Code changes**
+  - **`storage/FileNameSanitizer`:**
+    - After taking the last segment it applies NFC, `toLowerCase(Locale.ROOT)`, NFC again and `strip()`.
+    - All the existing checks (empty, `.`, `..`, control and format characters, 255 UTF-8 bytes) run on the lowered result, so the byte limit is checked after lowering.
+    - The output is the stored name everywhere (DB, disk, `AttachmentResponse.fileName`, `Content-Disposition`). Javadoc is updated.
+  - **`model/Client`:**
+    - Uniqueness is a plain `equals` on the already-normalized names.
+    - I removed the NFC/lowercase comparison helpers and their now-unused imports.
+    - `ClientAttachment` Javadoc is updated.
+  - **Extension check (`AllowedFileType.acceptsFileName`):** unchanged. It was already case-insensitive and now always sees lower case.
+  - **New changeset `004-attachment-file-name-plain-unique.sql`** (`002` and `003` untouched):
+    - It drops `uq_client_attachments_client_file_ci` and re-adds `UNIQUE (client_id, file_name)` as `uq_client_attachments_client_file`.
+    - It has a Liquibase precondition (`onFail:HALT`, with an `onFailMessage` saying the files and rows must be renamed to lower case first) that `SELECT count(*) FROM client_attachments WHERE file_name <> lower(file_name)` returns 0.
+    - The rollback restores the case-insensitive unique index.
+    - There is no data update and no CHECK constraint.
+    - The migration ran on the empty Testcontainers schema.
+    - I did not test the HALT path against a table with mixed-case rows.
+  
+  **Tests**
+  - **`FileNameSanitizerTest`:**
+    - `Report.PDF` gives `report.pdf`, `Ä` gives `ä`, and `TITLE I.TXT` gives `title i.txt`.
+    - Decomposed `A` + diaeresis gives composed `ä`.
+    - New length-after-lowering test: U+0130 grows from 2 to 3 bytes when lowered, so 85 characters pass and 86 fail with the 255-byte message.
+  - **Entity (`ClientAttachmentRulesTest`):** the case-insensitive tests were replaced by one test that the entity compares plain names. Case folding is the sanitizer's job.
+  - **Service (`AttachmentServiceImplTest`):**
+    - New test: `Report.PDF` is stored and returned as `report.pdf`, and the directory listing shows only that name.
+    - Case-variant batch and case-variant-of-existing tests now expect 409 with the stored lower-case name.
+  - **Integration (`AttachmentApiIntegrationTest`, 20 to 21):**
+    - New test: `Report.PDF` shows up as `report.pdf` on disk, in the listing and in `Content-Disposition`. `REPORT.pdf` afterwards gives 409 quoting `report.pdf`.
+    - `Photo.PNG` is stored as `photo.png`.
+    - Delete followed by re-upload of `A.txt` gives 201 and is stored as `a.txt`.
+  - **Repository (`ClientRepositoryTest`):** the case-insensitive index test now checks the plain unique constraint. The same name twice is rejected, and the same name for different clients is allowed.
+  
+  **Counts**
+  - `FileNameSanitizerTest`: 31 to 34.
+  - `ClientAttachmentRulesTest`: 13 to 10.
+  - `AttachmentServiceImplTest`: 23 to 24.
+  - `AttachmentApiIntegrationTest`: 20 to 21.
+</agent-message>
+
+--- 2026-10-28 10:51:51
+remind me about the situation in which after deletion a file can stay on the server
+
+--- 2026-10-28 10:53:00
+yes, add the cleanup job
+
+--- 2026-10-28 10:56:59
+<agent-message from="a4aef6342abcacf5d">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  The attachments storage cleanup job is in and `backend/mvnw -f backend/pom.xml test` passes: 288 tests, 0 failures, BUILD SUCCESS (267 before). No git add/commit.
+  
+  **What it does:** once at `ApplicationReadyEvent`, then 1h after the end of each run. For each numeric client folder (plus clients that have rows but no folder), it does three things:
+  - **Leftovers:** it deletes `.deleted-*` and `.upload-*.tmp` files older than `min-age`, logging each at INFO.
+  - **Orphan files:** real-named files with no matching row are logged at WARN and never deleted, only if older than `min-age`.
+  - **Rows without a file:** logged at WARN and never deleted.
+  - **Summary:** one INFO line with the counts.
+  - **Errors:** a failure on one file or one client is logged at ERROR and counted, and the run continues. The job catches `RuntimeException` around the service, so nothing escapes to the scheduler.
+  
+  **New files** (under `backend/src/main/java/com/creditsai/`)
+  - `config/AttachmentCleanupProperties.java` is a separate `@ConfigurationProperties("app.attachments.cleanup")` record, so `AttachmentProperties` and its constructors are unchanged. `config/SchedulingConfig.java` carries `@EnableScheduling`.
+  - `job/AttachmentCleanupJob.java` is a new `job` package, outside the layer diagram. The service interface `service/AttachmentStorageCleanupService` has the impl `service/impl/AttachmentStorageCleanupServiceImpl`. The result record is `dto/StorageCleanupReport`.
+  - `repository/ClientAttachmentRepository.java` has read-only JPQL projections `findClientIdsWithAttachments()` and `findFileNamesByClientId(id)`. No entities or file content are loaded and there is no native SQL. It is injected only into the service impl.
+  - `storage/StoredFile.java` is a record (name, lastModified) with the leftover-name helpers.
+  - `AttachmentStorage` gained `listClientIds()`, `listFiles(clientId)` and `deleteLeftover(clientId, name)`. The file-system implementation lists only real folders named by a number and regular files, using `NOFOLLOW_LINKS`, so symlinks are ignored. `deleteLeftover` refuses anything that is not a leftover name and stays inside the client folder.
+  - `FileSystemAttachmentStorage.deleteQuietly` now logs at WARN instead of debug.
+  
+  **Config keys** (`application.yml`, `AttachmentCleanupProperties`)
+  ```
+  app.attachments.cleanup.interval: 1h    # Duration; fixed delay, also the initial delay of the first scheduled run
+  app.attachments.cleanup.min-age: 15m    # Duration; only older files are touched or reported
+  ```
+  
+  **Decision for you:** to avoid false "row without a file" warnings during a delete that has not committed yet, the missing-file report is skipped for a client while it has a fresh `.deleted-*` tombstone. That case is covered by a test.
+  
+  **Integration tests:** I did not need to disable the job. The startup run only deletes leftovers older than `min-age` and otherwise only logs. The first scheduled run is an hour later. A missing storage directory is handled and gives zero counts. `AttachmentCleanupSchedulingTest` boots the full context against the Testcontainers database. It checks that the properties bind to 1h and 15m, and that a `FixedDelayTask` for `AttachmentCleanupJob.runScheduled` is registered with a 1h interval and 1h initial delay.
+  
+  **Log examples**
+  ```
+  INFO  Attachment cleanup: removed leftover file '.deleted-abc' of client 1
+  WARN  Attachment cleanup: file 'orphan.pdf' of client 1 has no database row (not deleted)
+  WARN  Attachment cleanup: database row for file 'gone.pdf' of client 1 has no file
+  ERROR Attachment cleanup: could not remove leftover file '.deleted-a' of client 1: boom
+  INFO  Attachment cleanup finished: 1 clients checked, 2 leftovers removed, 0 files without a row, 0 rows without a file, 0 errors
+  ```
+  No absolute paths appear in the logs, and a test asserts that.
+  
+  **Tests** (+21)
+  - **`AttachmentStorageCleanupServiceImplTest` (11):** real storage in a `@TempDir` with a mocked repository.
+    - Old versus fresh tombstones and temp files.
+    - Orphan file reported but not deleted, fresh orphan not reported.
+    - Row without a file, including a client with no folder.
+    - Pending delete suppresses the missing-file warning.
+    - Non-numeric folder and symlinked folder ignored, symlinked file not followed.
+    - An I/O error on one file does not stop the run.
+    - A failure on one client does not stop the others.
+    - Missing storage directory gives zero counts.
+  - **`AttachmentCleanupJobTest` (2):** a service failure never escapes the job.
+  - **`AttachmentCleanupSchedulingTest` (2):** the config binding and scheduled-task registration described above.
+  - **`FileSystemAttachmentStorageTest` (+5):** `listClientIds`, `listFiles` and `deleteLeftover`.
+  - **`ClientRepositoryTest` (+1):** the two projections.
+</agent-message>
+
+--- 2026-10-28 11:34:43
+in the frontend i want if user click on the file name to download the attachment
+
+--- 2026-10-28 11:47:46
+/exam-log
+
+--- 2026-10-28 11:52:32
+please cleanup
+
+--- 2026-10-28 11:55:28
+yes, add it to the exam log
+
+--- 2026-10-28 11:55:56
+update the TODO.md
+
+--- 2026-10-28 11:57:13
+where in the filesystem attachment are saved

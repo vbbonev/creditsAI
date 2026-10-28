@@ -120,4 +120,73 @@ describe('ClientService', () => {
     expect(req.request.method).toBe('POST');
     req.flush(client);
   });
+
+  describe('attachments', () => {
+    const attachment = {
+      id: 3,
+      fileName: 'a.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 10,
+      uploadedBy: 'user1',
+      uploadedAt: '2026-10-27T10:00:00Z',
+    };
+
+    it('should create with a multipart body: JSON part "client" and parts "files"', async () => {
+      const pdf = new File(['x'], 'a.pdf', { type: 'application/pdf' });
+      const png = new File(['y'], 'b.png', { type: 'image/png' });
+      service.createWithFiles(request, [pdf, png]).subscribe();
+      const req = httpTesting.expectOne('/api/clients');
+      expect(req.request.method).toBe('POST');
+      const body = req.request.body as FormData;
+      expect(body).toBeInstanceOf(FormData);
+      const part = body.get('client') as Blob;
+      expect(part.type).toBe('application/json');
+      expect(JSON.parse(await part.text())).toEqual(request);
+      const files = body.getAll('files') as File[];
+      expect(files.map((f) => f.name)).toEqual(['a.pdf', 'b.png']);
+      req.flush(client, { status: 201, statusText: 'Created' });
+    });
+
+    it('should create with only the client part when there are no files', () => {
+      service.createWithFiles(request, []).subscribe();
+      const req = httpTesting.expectOne('/api/clients');
+      const body = req.request.body as FormData;
+      expect(body.has('client')).toBe(true);
+      expect(body.has('files')).toBe(false);
+      req.flush(client, { status: 201, statusText: 'Created' });
+    });
+
+    it('should list attachments', () => {
+      let received: unknown;
+      service.listAttachments(1).subscribe((a) => (received = a));
+      const req = httpTesting.expectOne('/api/clients/1/attachments');
+      expect(req.request.method).toBe('GET');
+      req.flush([attachment]);
+      expect(received).toEqual([attachment]);
+    });
+
+    it('should download the content as a blob', () => {
+      service.downloadAttachment(1, 3).subscribe();
+      const req = httpTesting.expectOne('/api/clients/1/attachments/3/content');
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      req.flush(new Blob(['x']));
+    });
+
+    it('should upload files as multipart parts "files"', () => {
+      const pdf = new File(['x'], 'a.pdf', { type: 'application/pdf' });
+      service.uploadAttachments(1, [pdf]).subscribe();
+      const req = httpTesting.expectOne('/api/clients/1/attachments');
+      expect(req.request.method).toBe('POST');
+      expect((req.request.body as FormData).getAll('files')).toHaveLength(1);
+      req.flush([attachment], { status: 201, statusText: 'Created' });
+    });
+
+    it('should delete an attachment', () => {
+      service.deleteAttachment(1, 3).subscribe();
+      const req = httpTesting.expectOne('/api/clients/1/attachments/3');
+      expect(req.request.method).toBe('DELETE');
+      req.flush(null, { status: 204, statusText: 'No Content' });
+    });
+  });
 });

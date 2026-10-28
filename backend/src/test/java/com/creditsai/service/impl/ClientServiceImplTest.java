@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.creditsai.dto.AttachmentUpload;
 import com.creditsai.dto.ClientRequest;
 import com.creditsai.dto.ClientResponse;
 import com.creditsai.exception.BusinessRuleException;
@@ -34,11 +35,14 @@ class ClientServiceImplTest {
     @Mock
     private ClientRepository clientRepository;
 
+    @Mock
+    private AttachmentIngestor attachmentIngestor;
+
     private ClientServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ClientServiceImpl(clientRepository, Mappers.getMapper(ClientMapper.class));
+        service = new ClientServiceImpl(clientRepository, Mappers.getMapper(ClientMapper.class), attachmentIngestor);
     }
 
     private static Client client(String name) {
@@ -305,5 +309,36 @@ class ClientServiceImplTest {
 
         // when / then
         assertThatThrownBy(() -> service.restore(1L)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createWithFiles_validRequest_savesClientFirstThenAttachesFiles() {
+        // given
+        given(clientRepository.save(any(Client.class))).willAnswer(i -> i.getArgument(0));
+        given(clientRepository.saveAndFlush(any(Client.class))).willAnswer(i -> i.getArgument(0));
+        List<AttachmentUpload> uploads = List.of(new AttachmentUpload("a.txt", 1, null));
+
+        // when
+        ClientResponse response = service.create(request(), uploads, "user1");
+
+        // then
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(clientRepository, attachmentIngestor);
+        order.verify(clientRepository).save(any(Client.class));
+        order.verify(attachmentIngestor).attach(any(Client.class), org.mockito.ArgumentMatchers.eq(uploads),
+                org.mockito.ArgumentMatchers.eq("user1"));
+        assertThat(response.name()).isEqualTo("New");
+    }
+
+    @Test
+    void createWithFiles_fileRejected_propagatesAndDoesNotFlushTheClient() {
+        // given
+        given(clientRepository.save(any(Client.class))).willAnswer(i -> i.getArgument(0));
+        org.mockito.Mockito.doThrow(new BusinessRuleException("A client can have at most 30 files."))
+                .when(attachmentIngestor).attach(any(Client.class), any(), any());
+
+        // when / then: the exception rolls the transaction back (client row and files)
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(request(), List.of(), "user1"))
+                .isInstanceOf(BusinessRuleException.class);
+        verify(clientRepository, never()).saveAndFlush(any(Client.class));
     }
 }

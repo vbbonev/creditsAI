@@ -1,0 +1,98 @@
+<section>
+  <div class="header">
+    <h3>Files</h3>
+    <span class="spacer"></span>
+    @if (isAdmin) {
+      <button mat-stroked-button type="button" [disabled]="busy()" (click)="picker.click()">
+        <mat-icon>upload_file</mat-icon>
+        Upload
+      </button>
+      <input
+        #picker
+        class="picker"
+        type="file"
+        name="files"
+        multiple
+        [accept]="accept"
+        (change)="onFilesSelected($event)"
+      />
+    }
+  </div>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  @if (errors().length > 0) {
+    <ul class="errors" role="alert">
+      @for (error of errors(); track error) {
+        <li>{{ error }}</li>
+      }
+    </ul>
+  }
+
+  @if (!loading() && attachments().length === 0) {
+    <p class="empty">No files attached.</p>
+  }
+
+  <mat-list>
+    @for (attachment of attachments(); track attachment.id) {
+      <mat-list-item class="item">
+        @if (thumbnails()[attachment.id]; as url) {
+          <button
+            matListItemAvatar
+            type="button"
+            class="thumb"
+            [attr.aria-label]="'Preview ' + attachment.fileName"
+            (click)="preview(attachment)"
+          >
+            <img [src]="url" [alt]="attachment.fileName" />
+          </button>
+        } @else {
+          <mat-icon matListItemIcon>{{ icon(attachment) }}</mat-icon>
+        }
+        <span matListItemTitle>
+          <button
+            type="button"
+            class="file-name"
+            title="Download"
+            [disabled]="busy()"
+            (click)="download(attachment)"
+          >
+            {{ attachment.fileName }}
+          </button>
+        </span>
+        <span matListItemLine>
+          {{ attachment.sizeBytes | fileSize }} · uploaded by {{ attachment.uploadedBy }} on
+          {{ attachment.uploadedAt | date: 'medium' }}
+        </span>
+        <span matListItemMeta class="row-actions">
+          <button
+            mat-icon-button
+            type="button"
+            [disabled]="busy()"
+            [attr.aria-label]="'Download ' + attachment.fileName"
+            (click)="download(attachment)"
+          >
+            <mat-icon>download</mat-icon>
+          </button>
+          @if (isAdmin) {
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="busy()"
+              [attr.aria-label]="'Delete ' + attachment.fileName"
+              (click)="remove(attachment)"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          }
+        </span>
+      </mat-list-item>
+    }
+  </mat-list>
+
+  @if (isAdmin) {
+    <p class="hint">{{ limitsText }}</p>
+  }
+</section>

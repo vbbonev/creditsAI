@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -33,6 +34,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     static final String VALIDATION_FAILED = "Some fields are invalid. Please correct them and try again.";
     static final String ACCESS_DENIED = "You do not have permission to perform this action.";
     static final String UNEXPECTED_ERROR = "An unexpected error occurred. Please try again later.";
+    static final String UPLOAD_TOO_LARGE =
+            "The upload is too large. A single file may be at most 5 MB and all files of a client together at most 20 MB.";
     static final String UNSUPPORTED_PROPERTY = "The request refers to a field that is not supported.";
 
     /**
@@ -55,6 +58,47 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(BusinessRuleException.class)
     public ProblemDetail handleBusinessRule(BusinessRuleException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Answers a file that is too large with 413.
+     *
+     * @param ex the exception carrying the user-readable message
+     * @return the problem detail
+     */
+    @ExceptionHandler(PayloadTooLargeException.class)
+    public ProblemDetail handlePayloadTooLarge(PayloadTooLargeException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE, ex.getMessage());
+    }
+
+    /**
+     * Answers a file of a disallowed type, or whose content does not match its extension, with 415.
+     *
+     * @param ex the exception carrying the user-readable message
+     * @return the problem detail
+     */
+    @ExceptionHandler(UnsupportedFileTypeException.class)
+    public ProblemDetail handleUnsupportedFileType(UnsupportedFileTypeException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage());
+    }
+
+    /**
+     * Answers a multipart request that exceeds the servlet container's size limits with 413 and a
+     * readable message (the framework's default text is generic).
+     *
+     * @param ex the exception thrown while reading the multipart request
+     * @param headers the response headers
+     * @param status the status chosen by Spring (413)
+     * @param request the current request
+     * @return the response with the problem detail as body
+     */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+                                                                          HttpHeaders headers,
+                                                                          HttpStatusCode status,
+                                                                          WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE, UPLOAD_TOO_LARGE);
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).headers(headers).body(problem);
     }
 
     /**

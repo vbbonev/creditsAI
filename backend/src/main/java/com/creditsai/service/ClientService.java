@@ -1,9 +1,11 @@
 package com.creditsai.service;
 
+import com.creditsai.dto.AttachmentUpload;
 import com.creditsai.dto.ClientRequest;
 import com.creditsai.dto.ClientResponse;
 import com.creditsai.exception.BusinessRuleException;
 import com.creditsai.exception.ResourceNotFoundException;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -20,6 +22,22 @@ public interface ClientService {
      * @return the created client
      */
     ClientResponse create(ClientRequest request);
+
+    /**
+     * Registers a new client together with its files. It is all or nothing: if any file is
+     * rejected, no client is created and no file remains on disk.
+     *
+     * @param request the validated client data
+     * @param uploads the received files, may be empty
+     * @param uploadedBy the username recorded as uploader of the files
+     * @return the created client
+     * @throws com.creditsai.exception.InvalidRequestException if a file name is not acceptable or a file is empty
+     * @throws com.creditsai.exception.PayloadTooLargeException if a file is too large
+     * @throws com.creditsai.exception.UnsupportedFileTypeException if a file's content type is not
+     *         allowed or does not match its extension
+     * @throws BusinessRuleException if a name is repeated or the count or total size limit is exceeded
+     */
+    ClientResponse create(ClientRequest request, List<AttachmentUpload> uploads, String uploadedBy);
 
     /**
      * Lists clients whose name or identifier contains the search text (case-insensitive).

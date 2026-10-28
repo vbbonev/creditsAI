@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.creditsai.TestcontainersConfiguration;
 import com.creditsai.model.Client;
+import com.creditsai.model.ClientAttachment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -188,5 +189,99 @@ class ClientRepositoryTest {
     void findByIdAndArchivedFalse_unknownId_returnsEmpty() {
         // when / then
         assertThat(repository.findByIdAndArchivedFalse(-1L)).isEmpty();
+    }
+
+    @Test
+    void findByIdForUpdate_archivedClient_isStillFound() {
+        // given
+        Client saved = save("A", true);
+
+        // when / then
+        assertThat(repository.findByIdForUpdate(saved.getId())).isPresent();
+    }
+
+    @Test
+    void findByIdForUpdate_unknownId_returnsEmpty() {
+        // when / then
+        assertThat(repository.findByIdForUpdate(-1L)).isEmpty();
+    }
+
+    @Test
+    void saveAndDeleteAttachments_throughClient_persistsAndOrphanRemovalDeletesRows() {
+        // given
+        Client client = save("A", false);
+        client.addAttachment(com.creditsai.model.ClientAttachment.builder().fileName("a.txt")
+                .contentType("text/plain").sizeBytes(1).sha256("0".repeat(64)).uploadedBy("u").build(), 30, 1000);
+        repository.saveAndFlush(client);
+
+        // when / then: persisted with id and upload time
+        Client reloaded = repository.findByIdForUpdate(client.getId()).orElseThrow();
+        assertThat(reloaded.getAttachments()).singleElement().satisfies(a -> {
+            assertThat(a.getId()).isNotNull();
+            assertThat(a.getUploadedAt()).isNotNull();
+        });
+
+        // and: removing it deletes the row
+        Long attachmentId = reloaded.getAttachments().get(0).getId();
+        reloaded.removeAttachment(attachmentId);
+        repository.saveAndFlush(reloaded);
+        assertThat(repository.findByIdForUpdate(client.getId()).orElseThrow().getAttachments()).isEmpty();
+    }
+
+    @Test
+    void saveAttachment_sameNameTwice_isRejectedByUniqueConstraint() {
+        // given: the entity rule is bypassed on purpose, to test the database safety net (plain UNIQUE (client_id, file_name))
+        Client client = save("A", false);
+        client.addAttachment(attachment("\u00e4.pdf"), 30, 1000);
+        repository.saveAndFlush(client);
+        ClientAttachment variant = attachment("\u00e4.pdf");
+        org.springframework.test.util.ReflectionTestUtils.setField(variant, "client", client);
+        ((java.util.List<ClientAttachment>) org.springframework.test.util.ReflectionTestUtils
+                .getField(client, "attachments")).add(variant);
+
+        // when / then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> repository.saveAndFlush(client))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void saveAttachment_sameNameForDifferentClients_isAllowed() {
+        // given
+        Client first = save("A", false);
+        Client second = save("B", false);
+        first.addAttachment(attachment("a.pdf"), 30, 1000);
+        second.addAttachment(attachment("a.pdf"), 30, 1000);
+
+        // when / then
+        repository.saveAndFlush(first);
+        repository.saveAndFlush(second);
+    }
+
+    @Autowired
+    private ClientAttachmentRepository attachmentRepository;
+
+    @Test
+    void attachmentProjections_returnClientIdsAndFileNames() {
+        // given
+        Client first = save("A", false);
+        Client second = save("B", false);
+        save("C", false);
+        first.addAttachment(attachment("b.pdf"), 30, 1000);
+        first.addAttachment(attachment("a.pdf"), 30, 1000);
+        second.addAttachment(attachment("c.pdf"), 30, 1000);
+        repository.saveAndFlush(first);
+        repository.saveAndFlush(second);
+
+        // when / then
+        assertThat(attachmentRepository.findClientIdsWithAttachments())
+                .containsExactlyInAnyOrder(first.getId(), second.getId());
+        assertThat(attachmentRepository.findFileNamesByClientId(first.getId()))
+                .containsExactlyInAnyOrder("a.pdf", "b.pdf");
+        assertThat(attachmentRepository.findFileNamesByClientId(-1L)).isEmpty();
+    }
+
+    private static ClientAttachment attachment(String name) {
+        return ClientAttachment.builder().fileName(name).contentType("application/pdf").sizeBytes(1)
+                .sha256("0".repeat(64)).uploadedBy("u").build();
     }
 }

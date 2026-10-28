@@ -87,6 +87,31 @@
 - **Issues / fixes:** (1) Bash permission checks failed transiently ("auto mode classifier gave no verdict"), so the subagent couldn't compile; the user ran `! backend/mvnw ... compile` by hand. (2) The agent put `@EnableSpringDataWebSupport(VIA_DTO)` on the app class, which makes Boot's auto-configuration step aside and silently ignore `spring.data.web.pageable.*` such as `max-page-size` → moved to `application.yml`. (3) Spring Data 4 moved `PropertyReferenceException`/`PropertyPath` to `org.springframework.data.core` (compile error). (4) An old test expected 404 on `/api/clients` because the endpoint hadn't existed → now 200.
 - **Evidence:** `backend/mvnw -f backend/pom.xml test` → Tests run: 104, Failures: 0.
 
+### 2026-10-28 — Client attachments: files on disk, limits, cleanup job
+- **Approach:** Claude asked about seven design points first (file types, roles, delete, archived clients, storage, limits, UI). Then three follow-up multiple-choice questions on how a USER attaches files to a "new" client, duplicate names, and noexec. The user decided:
+  - The backend checks real content (magic bytes).
+  - A USER attaches files only in the create request (one atomic multipart POST). After that only ADMIN adds or deletes.
+  - Attachments are physically deleted, the one exception to soft delete.
+  - Storage is a named volume with one folder per client and real names (later lowercased).
+  - Limits: 5 MB per file, 20 MB and 30 files per client, configurable.
+- **Workflow:**
+  1. `backend-dev` and `frontend-dev` ran in parallel against an API contract written by Claude. Claude did the infra itself: the `attachments-data` volume, a 0750 folder in the Dockerfile, nginx `client_max_body_size 21m`, CSP `img-src blob:`, plus updates to CLAUDE.md and the infrastructure rule.
+  2. `security-reviewer` found 1 High, 1 Medium and 3 Low. All were fixed by `backend-dev`.
+  3. The user then asked for case-insensitive names (changeset 003), then lowercase-only names (changeset 004, which halts if non-lowercase rows exist). Last came a cleanup job for leftover files: it deletes stale `.deleted-*`/`.upload-*.tmp` files and only reports orphans.
+- **Testing:** backend 111 → 288 tests (Tika detection with real sample bytes, sanitizer, `@TempDir` storage, entity rules, WebMvc role matrix, Testcontainers integration, a real-Tomcat 413 test, 6 parallel uploads against the row lock), all green. Claude also checked the running stack through nginx with curl and a PKCE token script: rights, 415 spoofing with rollback, 413, 409, 0640 files on disk, download headers, and cleanup logs with planted files.
+- **AI tooling used:** Claude Code, the `backend-dev`/`frontend-dev`/`security-reviewer` subagents (resumed with SendMessage for each change), AskUserQuestion, the liquibase/security/java-tests rules, and the `protect-files.sh` hook.
+- **Key prompt(s):**
+  > let's add the possibility to attach file to the Client ... saved in the file system not as BLOB in DB ... 1 file max 5MB, all files attached to a client - max 20MB
+  > remind me about the situation in which after deletion a file can stay on the server
+- **Issues / fixes:**
+  1. The hook blocks `repository.delete*`, so physical delete was done through `orphanRemoval` in the `Client` aggregate.
+  2. Review High: an unclosed `TikaInputStream` left a full copy of every DOCX/XLSX in `/tmp` → try-with-resources.
+  3. Review Medium: a delete-after-commit race with a same-name re-upload → a tombstone rename under the row lock.
+  4. tika-core can't tell DOCX/XLSX from zip → a small JDK `OoxmlInspector`.
+  5. The frontend compared names case-insensitively and the backend did not → aligned.
+  6. During cleanup Claude found 38 leftover `attachments-it*`/`attachments-http*` folders in the system temp dir: the two integration tests created a storage folder per run and never removed it → `@AfterAll` with `FileSystemUtils.deleteRecursively`; after a full run (288 green) nothing is left behind.
+- **Evidence:** `backend/mvnw -f backend/pom.xml test` (288 passed); `docker compose logs backend | grep "Attachment cleanup"`
+
 ## Frontend
 
 ### 2026-10-26 — Angular skeleton, layout shell, HTTP error handling
@@ -103,5 +128,38 @@
   > add the HTTP error interceptor and delete the login test script
 - **Issues / fixes:** (1) Node/Angular version mismatch, found only when the CLI refused to run. (2) A spec built TestBed from the full `appConfig`, which would run the real Keycloak init → moved the icon setting into `provideMaterialDefaults()`. (3) The interceptor spec didn't compile (`unknown` body type) → fixed the type. (4) Limitation: if Keycloak is down at page load, the user sees nginx's 502 page, not the app's "unavailable" page.
 - **Evidence:** `npm --prefix frontend test -- --watch=false` (76 passed); http://localhost after logging in as `user1` and `admin1` (screenshot candidate: the toolbar with the admin icon)
+
+### 2026-10-27 — Client feature: list with search, form dialog, detail page
+- **Approach:** Claude asked open questions about screens, columns, archived clients, actions and what happens after saving, and the user answered each one. Search needed a backend change, so the API was extended first and then the UI was built on it. The user decided that the toggle shows active and archived clients together.
+- **Workflow:**
+  1. User: "let's implement the client functionality in the frontend". Claude asked 5 open questions. The user chose create/edit in a dialog, the columns name/identifier/address, sort by name, 10 rows per page, search by name or identifier, an archived toggle on the list, and actions on a detail page. After a save the app returns to the list with a message.
+  2. A follow-up multiple-choice question was rejected so the user could explain first ([[ask-architecture-first]] again). The user then chose active and archived together, and accepted the defaults (one box, contains, 300 ms debounce).
+  3. Backend: `?search=` (a JPQL `lower(...) like`, with `%`/`_` escaped) and `?includeArchived=true` (ADMIN only, `@PreAuthorize`), which replaced the old `?archived=true`.
+  4. Frontend: `ClientService`, `ClientList` (mat-table, sort, paginator, debounced search, toggle), the `ClientForm` dialog (template-driven, a `NotBlankValidator` directive, 400 field errors shown on the fields), and `ClientDetail` (Edit/Archive with a confirmation/Restore for ADMIN). Also `shared/` pieces: `ConfirmDialog`, `applyServerErrors`, `NotificationService` and `Page<T>`.
+- **Testing:** backend 104 → 111 tests (repository against Testcontainers Postgres, incl. Cyrillic and a literal `%`; service; WebMvc 403 for USER; integration); frontend 76 → 141 Vitest specs; `ng build` OK. All green. The app has not been checked in a browser yet, because the stack needs a rebuild.
+- **AI tooling used:** Claude Code inline, AskUserQuestion, `frontend/CLAUDE.md` and `backend/CLAUDE.md`, the `jpa-repositories` and `java-tests` rules, the PreToolUse hook, and Prettier.
+- **Key prompt(s):**
+  > let's implement the client functionality in the frontend
+  > 1. dialog over the list; 2. The list will include name, identifier, address. Default sort is on name, default page size is 10. We will add search oportunity by name or identifier; 3. toggle on the same list; 4. button on the detail page; 5. go back to the list and show the success message
+  > active and archived together, defaults are OK
+- **Issues / fixes:** (1) The PreToolUse hook blocked `FormControl` even in a spec → the validator is tested with a plain control stub. (2) Claude caught a bug of its own: binding the search box to the debounced query would overwrite text typed during the debounce window → a separate `searchText` field. (3) Prettier reformatted 7 new files. (4) Claude chose on its own that Archive/Restore also return to the list (the user only specified this for saving); this was reported to the user for confirmation.
+- **Evidence:** `backend/mvnw -f backend/pom.xml test` (111 passed); `npm --prefix frontend test -- --watch=false` (141 passed); after `docker compose up -d --build --wait`: http://localhost/clients as `user1` and `admin1` (screenshot candidates: the list with search, the archived toggle, the form dialog with errors, the archive confirmation)
+
+### 2026-10-28 — Client attachments UI: upload on create, list, preview, download
+- **Approach:** Following the user's decisions, files are picked in the create dialog and sent with the client in one multipart request. The detail page gets a Files section: download for everyone; upload and delete (with a "permanently deleted" confirm) for ADMIN only. Downloads and thumbnails are fetched as blobs with the bearer token, never as plain links.
+- **Workflow:**
+  1. `frontend-dev` built `client-attachments`, `attachment-preview-dialog`, `attachment.validation`/`constants`, a `fileSize` pipe and the multipart `createWithFiles`. Limits are mirrored for UX only.
+  2. Claude added NFC normalization to the duplicate-name check, matching the backend.
+  3. On the user's request, clicking a file name now downloads the file.
+- **Testing:** Vitest 141 → 183 specs, all green: multipart body shape, limits and duplicates, USER vs ADMIN visibility, thumbnail URL revocation, download on name click. `npm run build` OK. The UI was not checked in a browser.
+- **AI tooling used:** the `frontend-dev` subagent, Claude Code inline edits, and `frontend/CLAUDE.md`.
+- **Key prompt(s):**
+  > A section on the client detail/edit page. Let the pictures have preview
+  > in the frontend i want if user click on the file name to download the attachment
+- **Issues / fixes:**
+  1. HEIC/TIFF can't be previewed by most browsers → icon + download only.
+  2. The CSP needed `img-src blob:` for thumbnails.
+  3. The build warns that the initial bundle is over the 500 kB budget. It's caused by the vendor chunks, not this feature.
+- **Evidence:** `npm --prefix frontend test -- --watch=false` (183 passed); http://localhost/clients/{id} as `user1`/`admin1` (screenshot candidates: the create dialog with files, the Files section with thumbnails, the preview dialog)
 
 ## Testing

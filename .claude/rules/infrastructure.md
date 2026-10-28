@@ -50,6 +50,13 @@ The SPA calls the API with the relative path `/api` and Keycloak at `http://loca
 - `frontend/Dockerfile`: multi-stage. A `node:22.23.4-alpine` stage runs `npm ci && npm run build`, and an `nginx:1.30.6-alpine` stage serves `dist/frontend/browser` with `frontend/nginx.conf` (plus the two snippet files) and runs `nginx -t` at build time. Its healthcheck uses busybox `wget`.
 - Pin image versions. Never use `latest`.
 
+## Attachments volume
+- Client attachments are files in the named volume `attachments-data`, mounted only into `backend` at `/data/attachments` (one folder per client id). They are not BLOBs in Postgres.
+- `backend/Dockerfile` creates `/data/attachments` as `app:app 0750` before `USER app`, so a new volume takes that owner and mode. The backend writes folders as 0750 and files as 0640, with no execute bits. A named volume can't easily be mounted `noexec`.
+- nginx `/api/` has `client_max_body_size 21m` (20 MB of files plus multipart overhead). The backend enforces the exact limits (`app.attachments` in `application.yml`). Keep the two in step.
+- The SPA CSP allows `img-src blob:` for picture previews.
+- `docker compose down -v` deletes the attachments too. Always ask the user first.
+
 ## One Postgres, two databases
 - `docker/postgres/init/01-create-databases.sh` (mounted at `/docker-entrypoint-initdb.d`) creates:
   - database `credits`, owned by user `credits` (the application)

@@ -12,6 +12,12 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  servlet:
+    multipart:
+      # Consistent with app.attachments: one file at most 5 MB; a request carries up to 20 MB of
+      # files in total plus the client JSON and multipart overhead
+      max-file-size: 5MB
+      max-request-size: 21MB
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
   data:
@@ -32,6 +38,9 @@ spring:
           jwk-set-uri: http://keycloak:8080/auth/realms/credits/protocol/openid-connect/certs
 
 server:
+  tomcat:
+    # Multipart parts per request: 30 files + the client JSON part + margin (app.attachments.max-files is enforced separately)
+    max-part-count: 32
   error:
     include-stacktrace: never
     include-message: never
@@ -46,3 +55,15 @@ app:
   security:
     # Only tokens whose "azp" (authorized party) is this Keycloak client are accepted
     client-id: credits-web
+  attachments:
+    # Files live in {storage-dir}/{clientId}/{fileName} (a Docker volume in compose)
+    storage-dir: /data/attachments
+    max-file-size: 5MB
+    max-total-size: 20MB
+    max-files: 30
+    cleanup:
+      # Runs at startup and then this long after each run; removes old .deleted-*/.upload-*.tmp
+      # leftovers and only reports files without a row and rows without a file
+      interval: 1h
+      # Only files older than this are touched or reported (protects uploads/deletes in progress)
+      min-age: 15m

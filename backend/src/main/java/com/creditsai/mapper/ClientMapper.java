@@ -4,13 +4,15 @@ import com.creditsai.dto.ClientRequest;
 import com.creditsai.dto.ClientResponse;
 import com.creditsai.model.Client;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.ReportingPolicy;
 
 /**
  * Mapper pattern (MapStruct) between {@link Client} and its DTOs. The server-set fields
  * (id, archived, archivedAt, createdAt, updatedAt) have no setters on the entity, so MapStruct
- * never treats them as targets and they need no {@code ignore}.
+ * never treats them as targets and they need no {@code ignore}. The attachments are changed only
+ * through the entity's methods, so they are ignored explicitly.
  */
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface ClientMapper {
@@ -29,6 +31,7 @@ public interface ClientMapper {
      * @param request the validated request
      * @return a new, unsaved client
      */
+    @Mapping(target = "attachments", ignore = true)
     Client toEntity(ClientRequest request);
 
     /**
@@ -37,5 +40,6 @@ public interface ClientMapper {
      * @param request the validated request
      * @param client the entity to change
      */
+    @Mapping(target = "attachments", ignore = true)
     void updateEntity(ClientRequest request, @MappingTarget Client client);
 }

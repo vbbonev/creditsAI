@@ -34,6 +34,8 @@ Any logged-in **USER** can register clients and credits. Only an **ADMIN** can e
 - Fields are not decided yet. Ask the user and don't invent them.
 - Every logged-in user can read and list all clients and credits.
 - **Nothing is physically deleted.** "Delete" means archive: the record gets an `archived` flag.
+  - The one exception is **client attachments**: removing one deletes its row and its file (decided 2026-10-28).
+- **Client attachments** are stored on the file system (`attachments-data` volume, `/data/attachments/{clientId}/{fileName}`), not as BLOBs. Allowed: PDF, DOCX, XLSX, ODT, TXT, JPEG, PNG, GIF, WEBP, HEIC, TIFF, checked by file content. Limits are in `app.attachments` in `application.yml`: 5 MB per file, 20 MB and 30 files per client. File names are stored in lower case (DB and disk: `Report.PDF` becomes `report.pdf`), and a duplicate name in the same client is rejected (decided 2026-10-28). A USER attaches files only when creating a client (one multipart request). After that, only an ADMIN adds or removes them. Everyone logged in can download them, but only an ADMIN can do anything with an archived client's attachments.
 - A client that has an **active credit** can't be archived. The request fails with a message the user can read.
 - Business logic (calculations etc.) is added later, one feature at a time. Ask before adding any.
 - Keycloak realm `credits`, realm roles `USER` and `ADMIN`. The backend only validates tokens and has no local users table.

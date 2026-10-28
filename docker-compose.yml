@@ -66,6 +66,10 @@ services:
     environment:
       CREDITS_DB_PASSWORD: ${CREDITS_DB_PASSWORD:?set CREDITS_DB_PASSWORD in .env}
     # No published port: the frontend nginx proxies /api/ to backend:8080.
+    # Client attachments live on the file system (not as BLOBs), in this named volume. It is
+    # mounted only here; the files carry no execute bits (0640, folders 0750).
+    volumes:
+      - attachments-data:/data/attachments
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,3 +110,4 @@ services:
 
 volumes:
   postgres-data:
+  attachments-data:

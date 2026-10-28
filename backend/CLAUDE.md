@@ -18,6 +18,9 @@ com.creditsai
 ├── dto/            request/response records
 ├── mapper/         MapStruct: XxxMapper
 ├── exception/      custom exceptions + GlobalExceptionHandler
+├── config/         @ConfigurationProperties records (e.g. AttachmentProperties)
+├── storage/        file-system attachment storage, file name sanitizing, content type detection
+├── job/            @Scheduled jobs; they only call service interfaces (e.g. AttachmentCleanupJob)
 └── security/       Spring Security config (JWT validation only)
 ```
 
@@ -37,6 +40,7 @@ com.creditsai
 
 ## Archiving (soft delete)
 - Entities have `archived BOOLEAN NOT NULL DEFAULT false` and `archived_at TIMESTAMPTZ`. **Never physically delete.** In `src/main`, a hook blocks `repository.delete*(...)` and JPQL `DELETE` statements.
+- Exception: client attachments are physically deleted (row and file). The `Client` aggregate removes them through `orphanRemoval`, and the file is deleted after commit.
 - `DELETE /api/clients/{id}` (ADMIN) archives the record and returns 204.
 - Archived records are excluded from normal reads. Use derived queries such as `findByArchivedFalse(Pageable)` and `findByIdAndArchivedFalse(id)`. An archived record behaves like 404.
 - The rule lives in the entity (encapsulation): `client.archive()` throws `BusinessRuleException` (409) if the client has an active credit, otherwise it sets `archived`/`archivedAt`. The service only loads the entity, calls `archive()`, and saves.

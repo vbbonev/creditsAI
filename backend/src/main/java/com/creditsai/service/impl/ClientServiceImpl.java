@@ -1,5 +1,6 @@
 package com.creditsai.service.impl;
 
+import com.creditsai.dto.AttachmentUpload;
 import com.creditsai.dto.ClientRequest;
 import com.creditsai.dto.ClientResponse;
 import com.creditsai.exception.ResourceNotFoundException;
@@ -7,6 +8,7 @@ import com.creditsai.mapper.ClientMapper;
 import com.creditsai.model.Client;
 import com.creditsai.repository.ClientRepository;
 import com.creditsai.service.ClientService;
+import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,6 +27,7 @@ public class ClientServiceImpl implements ClientService {
 
     private final ClientRepository clientRepository;
     private final ClientMapper clientMapper;
+    private final AttachmentIngestor attachmentIngestor;
 
     /** {@inheritDoc} */
     @Override
@@ -32,6 +35,20 @@ public class ClientServiceImpl implements ClientService {
     public ClientResponse create(ClientRequest request) {
         Client saved = clientRepository.save(clientMapper.toEntity(request));
         return clientMapper.toResponse(saved);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The client is saved first to get its id (the folder name); a rejected file throws, and the
+     * rollback removes the row and the files already stored.
+     */
+    @Override
+    @Transactional
+    public ClientResponse create(ClientRequest request, List<AttachmentUpload> uploads, String uploadedBy) {
+        Client saved = clientRepository.save(clientMapper.toEntity(request));
+        attachmentIngestor.attach(saved, uploads, uploadedBy);
+        return clientMapper.toResponse(clientRepository.saveAndFlush(saved));
     }
 
     /** {@inheritDoc} */

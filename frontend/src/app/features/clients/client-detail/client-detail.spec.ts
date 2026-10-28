@@ -18,6 +18,7 @@ describe('ClientDetail', () => {
     get: ReturnType<typeof vi.fn>;
     archive: ReturnType<typeof vi.fn>;
     restore: ReturnType<typeof vi.fn>;
+    listAttachments: ReturnType<typeof vi.fn>;
   };
   let dialog: { open: ReturnType<typeof vi.fn> };
   let notification: { success: ReturnType<typeof vi.fn> };
@@ -54,6 +55,7 @@ describe('ClientDetail', () => {
         ),
       archive: vi.fn(),
       restore: vi.fn(),
+      listAttachments: vi.fn().mockReturnValue(of([])),
     };
     dialog = { open: vi.fn() };
     notification = { success: vi.fn() };
@@ -99,6 +101,12 @@ describe('ClientDetail', () => {
   it('should show a dash when there is no description', async () => {
     await render({ client: { ...active, description: null } });
     expect(el.querySelector('.description')?.textContent?.trim()).toBe('—');
+  });
+
+  it('should show the attachments section of the loaded client', async () => {
+    await render({});
+    expect(clientService.listAttachments).toHaveBeenCalledWith(7);
+    expect(el.querySelector('app-client-attachments')).not.toBeNull();
   });
 
   it('should offer a link back to the list', async () => {
