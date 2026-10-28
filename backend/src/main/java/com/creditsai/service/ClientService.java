@@ -22,13 +22,15 @@ public interface ClientService {
     ClientResponse create(ClientRequest request);
 
     /**
-     * Lists clients by archive state.
+     * Lists clients whose name or identifier contains the search text (case-insensitive).
      *
-     * @param archived {@code true} for archived clients, {@code false} for active ones
+     * @param search the text to find; {@code null} or blank matches every client
+     * @param includeArchived {@code true} to list archived clients together with active ones,
+     *        {@code false} for active ones only
      * @param pageable page, size and sort
      * @return the requested page
      */
-    Page<ClientResponse> list(boolean archived, Pageable pageable);
+    Page<ClientResponse> list(String search, boolean includeArchived, Pageable pageable);
 
     /**
      * Returns one client.

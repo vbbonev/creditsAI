@@ -1,0 +1,48 @@
+.fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 12px 24px;
+  margin: 8px 0 0;
+
+  dt {
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-label-large);
+  }
+
+  dd {
+    margin: 0;
+    font: var(--mat-sys-body-large);
+    overflow-wrap: anywhere;
+  }
+}
+
+.description {
+  white-space: pre-line;
+}
+
+.archived-chip {
+  display: inline-flex;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+// Narrow screens: labels above values
+@media (max-width: 600px) {
+  .fields {
+    grid-template-columns: 1fr;
+    gap: 4px;
+
+    dd {
+      margin-bottom: 8px;
+    }
+  }
+}

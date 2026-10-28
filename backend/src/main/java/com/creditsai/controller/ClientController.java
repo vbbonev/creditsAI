@@ -57,20 +57,23 @@ public class ClientController {
     }
 
     /**
-     * Lists clients; archived ones are visible to ADMIN only.
+     * Lists clients, optionally filtered by a search text; archived clients are included for ADMIN only.
      *
-     * @param archived {@code true} to list archived clients (ADMIN only), default {@code false}
+     * @param search text to find in the name or identifier (case-insensitive); blank or missing lists all
+     * @param includeArchived {@code true} to list archived clients together with active ones (ADMIN only),
+     *        default {@code false}
      * @param pageable page, size (default 20, at most 100) and sort (default by name)
      * @return the requested page
      * @throws InvalidRequestException if sorting by a field outside {@link #SORTABLE_FIELDS}
      */
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or (hasRole('USER') and !#archived)")
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('USER') and !#includeArchived)")
     public Page<ClientResponse> list(
-            @P("archived") @RequestParam(name = "archived", defaultValue = "false") boolean archived,
+            @RequestParam(name = "search", required = false) String search,
+            @P("includeArchived") @RequestParam(name = "includeArchived", defaultValue = "false") boolean includeArchived,
             @PageableDefault(size = 20, sort = "name") Pageable pageable) {
         checkSortable(pageable.getSort());
-        return clientService.list(archived, pageable);
+        return clientService.list(search, includeArchived, pageable);
     }
 
     /**

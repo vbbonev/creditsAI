@@ -2,6 +2,7 @@ package com.creditsai.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -165,7 +166,7 @@ class ClientControllerTest {
     @Test
     void list_asUserDefault_returns200WithPageShapeAndDefaults() throws Exception {
         // given
-        given(clientService.list(eq(false), any(Pageable.class)))
+        given(clientService.list(isNull(), eq(false), any(Pageable.class)))
                 .willReturn(new PageImpl<>(List.of(response(1, false)), PageRequest.of(0, 20), 1));
 
         // when / then
@@ -178,7 +179,7 @@ class ClientControllerTest {
                 .andExpect(jsonPath("$.page.totalPages").value(1));
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(clientService).list(eq(false), captor.capture());
+        verify(clientService).list(isNull(), eq(false), captor.capture());
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getPageSize()).isEqualTo(20);
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getSort().getOrderFor("name")).isNotNull();
     }
@@ -186,7 +187,7 @@ class ClientControllerTest {
     @Test
     void list_customPageAndSize_passesPageableToService() throws Exception {
         // given
-        given(clientService.list(eq(false), any(Pageable.class)))
+        given(clientService.list(isNull(), eq(false), any(Pageable.class)))
                 .willReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5), 0));
 
         // when
@@ -194,28 +195,50 @@ class ClientControllerTest {
 
         // then
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(clientService).list(eq(false), captor.capture());
+        verify(clientService).list(isNull(), eq(false), captor.capture());
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getPageNumber()).isEqualTo(2);
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getPageSize()).isEqualTo(5);
     }
 
     @Test
-    void list_archivedTrueAsAdmin_returns200() throws Exception {
+    void list_includeArchivedAsAdmin_returns200() throws Exception {
         // given
-        given(clientService.list(eq(true), any(Pageable.class)))
-                .willReturn(new PageImpl<>(List.of(response(2, true)), PageRequest.of(0, 20), 1));
+        given(clientService.list(isNull(), eq(true), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of(response(1, false), response(2, true)), PageRequest.of(0, 20), 2));
 
         // when / then
-        mockMvc.perform(get("/api/clients?archived=true").with(admin()))
+        mockMvc.perform(get("/api/clients?includeArchived=true").with(admin()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].archived").value(true));
+                .andExpect(jsonPath("$.content[0].archived").value(false))
+                .andExpect(jsonPath("$.content[1].archived").value(true));
+    }
+
+    @Test
+    void list_includeArchivedAsUser_returns403() throws Exception {
+        // when / then
+        mockMvc.perform(get("/api/clients?includeArchived=true").with(user()))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(clientService);
+    }
+
+    @Test
+    void list_withSearch_passesSearchToService() throws Exception {
+        // given
+        given(clientService.list(eq("acme"), eq(false), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of(response(1, false)), PageRequest.of(0, 20), 1));
+
+        // when / then
+        mockMvc.perform(get("/api/clients?search=acme").with(user()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(1));
+        verify(clientService).list(eq("acme"), eq(false), any(Pageable.class));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"name", "identifier", "createdAt", "updatedAt", "archivedAt"})
     void list_sortByAllowedField_passesSortToService(String field) throws Exception {
         // given
-        given(clientService.list(eq(false), any(Pageable.class)))
+        given(clientService.list(isNull(), eq(false), any(Pageable.class)))
                 .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         // when
@@ -223,7 +246,7 @@ class ClientControllerTest {
 
         // then
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(clientService).list(eq(false), captor.capture());
+        verify(clientService).list(isNull(), eq(false), captor.capture());
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getSort().getOrderFor(field).isDescending()).isTrue();
     }
 
@@ -241,7 +264,7 @@ class ClientControllerTest {
     @Test
     void list_sizeAboveMax_isClampedTo100() throws Exception {
         // given
-        given(clientService.list(eq(false), any(Pageable.class)))
+        given(clientService.list(isNull(), eq(false), any(Pageable.class)))
                 .willReturn(new PageImpl<>(List.of(), PageRequest.of(0, 100), 0));
 
         // when
@@ -249,16 +272,8 @@ class ClientControllerTest {
 
         // then
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(clientService).list(eq(false), captor.capture());
+        verify(clientService).list(isNull(), eq(false), captor.capture());
         org.assertj.core.api.Assertions.assertThat(captor.getValue().getPageSize()).isEqualTo(100);
-    }
-
-    @Test
-    void list_archivedTrueAsUser_returns403() throws Exception {
-        // when / then
-        mockMvc.perform(get("/api/clients?archived=true").with(user()))
-                .andExpect(status().isForbidden());
-        verifyNoInteractions(clientService);
     }
 
     // ---- get ----

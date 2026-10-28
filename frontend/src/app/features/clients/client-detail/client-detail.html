@@ -1,0 +1,81 @@
+<mat-card appearance="outlined">
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  @if (client(); as client) {
+    <mat-card-header>
+      <mat-card-title>
+        {{ client.name }}
+        @if (client.archived) {
+          <mat-chip-set class="archived-chip">
+            <mat-chip disableRipple>Archived</mat-chip>
+          </mat-chip-set>
+        }
+      </mat-card-title>
+      <mat-card-subtitle>Client</mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <dl class="fields">
+        <dt>Identifier</dt>
+        <dd>{{ client.identifier }}</dd>
+
+        <dt>Address</dt>
+        <dd>{{ client.address }}</dd>
+
+        <dt>Description</dt>
+        <dd class="description">{{ client.description || '—' }}</dd>
+
+        <dt>Created</dt>
+        <dd>{{ client.createdAt | date: 'medium' }}</dd>
+
+        <dt>Last changed</dt>
+        <dd>{{ client.updatedAt | date: 'medium' }}</dd>
+
+        @if (client.archivedAt) {
+          <dt>Archived</dt>
+          <dd>{{ client.archivedAt | date: 'medium' }}</dd>
+        }
+      </dl>
+    </mat-card-content>
+
+    <mat-card-actions class="actions">
+      <a mat-button routerLink="/clients">
+        <mat-icon>arrow_back</mat-icon>
+        Back to list
+      </a>
+      @if (isAdmin) {
+        <span class="spacer"></span>
+        <button mat-stroked-button [disabled]="busy()" (click)="edit(client)">
+          <mat-icon>edit</mat-icon>
+          Edit
+        </button>
+        @if (client.archived) {
+          <button mat-flat-button [disabled]="busy()" (click)="restore(client)">
+            <mat-icon>unarchive</mat-icon>
+            Restore
+          </button>
+        } @else {
+          <button mat-flat-button [disabled]="busy()" (click)="archive(client)">
+            <mat-icon>archive</mat-icon>
+            Archive
+          </button>
+        }
+      }
+    </mat-card-actions>
+  } @else if (notFound()) {
+    <mat-card-header>
+      <mat-card-title>Client not found</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p>This client doesn't exist or is no longer available.</p>
+    </mat-card-content>
+    <mat-card-actions>
+      <a mat-button routerLink="/clients">
+        <mat-icon>arrow_back</mat-icon>
+        Back to list
+      </a>
+    </mat-card-actions>
+  }
+</mat-card>

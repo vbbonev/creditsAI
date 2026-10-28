@@ -7,6 +7,7 @@ import com.creditsai.mapper.ClientMapper;
 import com.creditsai.model.Client;
 import com.creditsai.repository.ClientRepository;
 import com.creditsai.service.ClientService;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,8 +36,9 @@ public class ClientServiceImpl implements ClientService {
 
     /** {@inheritDoc} */
     @Override
-    public Page<ClientResponse> list(boolean archived, Pageable pageable) {
-        return clientRepository.findByArchived(archived, pageable).map(clientMapper::toResponse);
+    public Page<ClientResponse> list(String search, boolean includeArchived, Pageable pageable) {
+        return clientRepository.search(containsPattern(search), includeArchived, pageable)
+                .map(clientMapper::toResponse);
     }
 
     /** {@inheritDoc} */
@@ -84,6 +86,24 @@ public class ClientServiceImpl implements ClientService {
      */
     private Client findOrThrow(Long id) {
         return clientRepository.findById(id).orElseThrow(() -> notFound(id));
+    }
+
+    /**
+     * Turns the search text into a lower-case LIKE pattern that matches it anywhere. The LIKE
+     * wildcards {@code %} and {@code _} (and the escape character) in the text are matched literally.
+     *
+     * @param search the search text, may be null or blank
+     * @return the pattern; {@code %} (matches everything) when the text is null or blank
+     */
+    private static String containsPattern(String search) {
+        if (search == null || search.isBlank()) {
+            return "%";
+        }
+        String escaped = search.strip().toLowerCase(Locale.ROOT)
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + escaped + "%";
     }
 
     /**

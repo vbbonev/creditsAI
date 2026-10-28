@@ -81,41 +81,70 @@ class ClientRepositoryTest {
     }
 
     @Test
-    void findByArchived_false_returnsOnlyActiveClients() {
+    void search_excludingArchived_returnsOnlyActiveClients() {
         // given
         save("Active", false);
         save("Old", true);
 
         // when
-        Page<Client> page = repository.findByArchived(false, PageRequest.of(0, 20));
+        Page<Client> page = repository.search("%", false, PageRequest.of(0, 20));
 
         // then
         assertThat(page.getContent()).extracting(Client::getName).containsExactly("Active");
     }
 
     @Test
-    void findByArchived_true_returnsOnlyArchivedClients() {
+    void search_includingArchived_returnsActiveAndArchivedClients() {
         // given
         save("Active", false);
         save("Old", true);
 
         // when
-        Page<Client> page = repository.findByArchived(true, PageRequest.of(0, 20));
+        Page<Client> page = repository.search("%", true, PageRequest.of(0, 20, Sort.by("name")));
 
         // then
-        assertThat(page.getContent()).extracting(Client::getName).containsExactly("Old");
+        assertThat(page.getContent()).extracting(Client::getName).containsExactly("Active", "Old");
     }
 
     @Test
-    void findByArchived_withPagingAndSort_returnsSortedSlicesWithTotals() {
+    void search_patternMatchesNameOrIdentifierCaseInsensitively() {
+        // given: names are stored with mixed case, identifiers are "id-" + name
+        save("Acme Ltd", false);
+        save("Beta", false);
+        save("Иван Петров", false);
+
+        // when / then
+        assertThat(repository.search("%acme%", false, PageRequest.of(0, 20)).getContent())
+                .extracting(Client::getName).containsExactly("Acme Ltd");
+        assertThat(repository.search("%id-beta%", false, PageRequest.of(0, 20)).getContent())
+                .extracting(Client::getName).containsExactly("Beta");
+        assertThat(repository.search("%иван%", false, PageRequest.of(0, 20)).getContent())
+                .extracting(Client::getName).containsExactly("Иван Петров");
+    }
+
+    @Test
+    void search_escapedWildcard_matchesItLiterally() {
+        // given
+        save("100% Ltd", false);
+        save("100 Ltd", false);
+
+        // when
+        Page<Client> page = repository.search("%100\\%%", false, PageRequest.of(0, 20));
+
+        // then
+        assertThat(page.getContent()).extracting(Client::getName).containsExactly("100% Ltd");
+    }
+
+    @Test
+    void search_withPagingAndSort_returnsSortedSlicesWithTotals() {
         // given
         save("C", false);
         save("A", false);
         save("B", false);
 
         // when
-        Page<Client> first = repository.findByArchived(false, PageRequest.of(0, 2, Sort.by("name")));
-        Page<Client> second = repository.findByArchived(false, PageRequest.of(1, 2, Sort.by("name")));
+        Page<Client> first = repository.search("%", false, PageRequest.of(0, 2, Sort.by("name")));
+        Page<Client> second = repository.search("%", false, PageRequest.of(1, 2, Sort.by("name")));
 
         // then
         assertThat(first.getContent()).extracting(Client::getName).containsExactly("A", "B");
@@ -125,9 +154,12 @@ class ClientRepositoryTest {
     }
 
     @Test
-    void findByArchived_noMatches_returnsEmptyPage() {
+    void search_noMatches_returnsEmptyPage() {
+        // given
+        save("Acme", false);
+
         // when
-        Page<Client> page = repository.findByArchived(true, PageRequest.of(0, 20));
+        Page<Client> page = repository.search("%zzz%", true, PageRequest.of(0, 20));
 
         // then
         assertThat(page).isEmpty();

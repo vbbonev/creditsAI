@@ -88,13 +88,14 @@ class ClientApiIntegrationTest {
                 .andExpect(jsonPath("$.page.totalElements").value(0));
         mockMvc.perform(get("/api/clients/" + id).with(USER)).andExpect(status().isNotFound());
 
-        // and: ADMIN sees it by id and in the archived list
+        // and: ADMIN sees it by id and in the list that includes archived clients
         mockMvc.perform(get("/api/clients/" + id).with(ADMIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.archived").value(true));
-        mockMvc.perform(get("/api/clients?archived=true").with(ADMIN))
-                .andExpect(jsonPath("$.content[0].id").value(id));
-        mockMvc.perform(get("/api/clients?archived=true").with(USER)).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/clients?includeArchived=true").with(ADMIN))
+                .andExpect(jsonPath("$.content[0].id").value(id))
+                .andExpect(jsonPath("$.content[0].archived").value(true));
+        mockMvc.perform(get("/api/clients?includeArchived=true").with(USER)).andExpect(status().isForbidden());
 
         // and: archiving again is a readable 409
         mockMvc.perform(delete("/api/clients/" + id).with(ADMIN))
@@ -154,6 +155,30 @@ class ClientApiIntegrationTest {
                 .andExpect(jsonPath("$.content[0].name").value("Alpha"))
                 .andExpect(jsonPath("$.content[1].name").value("Bravo"))
                 .andExpect(jsonPath("$.content[2].name").value("Charlie"));
+    }
+
+    @Test
+    void list_withSearch_matchesNameOrIdentifierAndArchivedOnlyWhenIncluded() throws Exception {
+        // given: two active clients and one archived
+        for (String name : new String[] {"Acme", "Beta", "Acme Old"}) {
+            mockMvc.perform(post("/api/clients").with(USER).contentType(MediaType.APPLICATION_JSON)
+                    .content(BODY.replace("Acme", name))).andExpect(status().isCreated());
+        }
+        long oldId = repository.findAll().stream().filter(c -> c.getName().equals("Acme Old"))
+                .findFirst().orElseThrow().getId();
+        mockMvc.perform(delete("/api/clients/" + oldId).with(ADMIN)).andExpect(status().isNoContent());
+
+        // when / then: a case-insensitive part of the name finds only the active match
+        mockMvc.perform(get("/api/clients?search=aCmE").with(USER))
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].name").value("Acme"));
+
+        // and: with includeArchived ADMIN also gets the archived match
+        mockMvc.perform(get("/api/clients?search=acme&includeArchived=true").with(ADMIN))
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].name").value("Acme"))
+                .andExpect(jsonPath("$.content[1].name").value("Acme Old"))
+                .andExpect(jsonPath("$.content[1].archived").value(true));
     }
 
     @Test

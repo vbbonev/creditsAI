@@ -1,0 +1,62 @@
+mat-card-header {
+  align-items: center;
+  padding-bottom: 16px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+  margin-bottom: 16px;
+}
+
+.search {
+  flex: 1 1 280px;
+  max-width: 480px;
+}
+
+.table-wrapper {
+  position: relative;
+  overflow-x: auto;
+
+  mat-progress-bar {
+    position: absolute;
+    top: 0;
+    z-index: 1;
+  }
+}
+
+.client-row {
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background-color: var(--mat-sys-surface-container-high);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+}
+
+.archived td {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.archived-chip {
+  display: inline-flex;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.no-data {
+  padding: 24px 16px;
+  color: var(--mat-sys-on-surface-variant);
+  text-align: center;
+}

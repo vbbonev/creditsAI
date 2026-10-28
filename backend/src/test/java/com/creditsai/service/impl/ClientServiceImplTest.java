@@ -72,14 +72,14 @@ class ClientServiceImplTest {
     }
 
     @Test
-    void list_archivedFalse_queriesRepositoryAndMapsPage() {
+    void list_noSearch_matchesEverythingAndMapsPage() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
-        given(clientRepository.findByArchived(false, pageable))
+        given(clientRepository.search("%", false, pageable))
                 .willReturn(new PageImpl<>(List.of(client("A")), pageable, 1));
 
         // when
-        Page<ClientResponse> page = service.list(false, pageable);
+        Page<ClientResponse> page = service.list(null, false, pageable);
 
         // then
         assertThat(page.getContent()).extracting(ClientResponse::name).containsExactly("A");
@@ -87,19 +87,58 @@ class ClientServiceImplTest {
     }
 
     @Test
-    void list_archivedTrue_queriesArchivedClients() {
+    void list_blankSearch_matchesEverything() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(clientRepository.search("%", false, pageable)).willReturn(Page.empty(pageable));
+
+        // when
+        service.list("   ", false, pageable);
+
+        // then
+        verify(clientRepository).search("%", false, pageable);
+    }
+
+    @Test
+    void list_search_isTrimmedLowerCasedAndWrappedInWildcards() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(clientRepository.search("%acme иван%", false, pageable)).willReturn(Page.empty(pageable));
+
+        // when
+        service.list("  ACME Иван ", false, pageable);
+
+        // then
+        verify(clientRepository).search("%acme иван%", false, pageable);
+    }
+
+    @Test
+    void list_searchWithLikeWildcards_escapesThem() {
+        // given
+        Pageable pageable = PageRequest.of(0, 20);
+        given(clientRepository.search("%100\\%\\_a\\\\b%", false, pageable)).willReturn(Page.empty(pageable));
+
+        // when
+        service.list("100%_a\\b", false, pageable);
+
+        // then
+        verify(clientRepository).search("%100\\%\\_a\\\\b%", false, pageable);
+    }
+
+    @Test
+    void list_includeArchived_passesFlagAndMapsArchivedClients() {
         // given
         Pageable pageable = PageRequest.of(0, 20);
         Client archived = client("Old");
         archived.archive();
-        given(clientRepository.findByArchived(true, pageable))
-                .willReturn(new PageImpl<>(List.of(archived), pageable, 1));
+        given(clientRepository.search("%", true, pageable))
+                .willReturn(new PageImpl<>(List.of(client("A"), archived), pageable, 2));
 
         // when
-        Page<ClientResponse> page = service.list(true, pageable);
+        Page<ClientResponse> page = service.list(null, true, pageable);
 
         // then
-        assertThat(page.getContent()).singleElement().satisfies(r -> assertThat(r.archived()).isTrue());
+        assertThat(page.getContent()).extracting(ClientResponse::archived).containsExactly(false, true);
     }
 
     @Test

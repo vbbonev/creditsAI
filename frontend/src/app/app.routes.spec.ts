@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Title } from '@angular/platform-browser';
 import { provideRouter, Router } from '@angular/router';
@@ -17,6 +19,9 @@ describe('app routes', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
+        // the client pages load data; requests stay pending in these routing tests
+        provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: Keycloak, useValue: { authenticated } },
         {
           provide: AuthService,
@@ -38,6 +43,7 @@ describe('app routes', () => {
 
     it.each([
       ['/clients', 'Clients · creditsAI'],
+      ['/clients/1', 'Client · creditsAI'],
       ['/credits', 'Credits · creditsAI'],
     ])('should lazy-load %s inside the shell', async (url, title) => {
       await harness.navigateByUrl(url);

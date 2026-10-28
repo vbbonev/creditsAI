@@ -490,3 +490,28 @@ i mean something like this " @GetMapping(value = "bankDeposit/page/endDateAfter/
 --- 2026-10-27 12:08:23
 i mean that we can make simplier this "URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}").buildAndExpand(created.id()).toUri();"[Image #1]
+
+--- 2026-10-27 12:18:56
+let's implement the client functionality in the frontend
+
+--- 2026-10-27 12:30:57
+1. dialog over the list;
+2. The list will include name, identifier, address. Default sort is on name, default page size is 10.We will add search oportunity by name or identifier;
+3. toggle on the same list;
+4. button on the detail page;
+5. go back to the list and show the success message
+
+--- 2026-10-27 15:41:37
+in search show archived clients only if toggle "show archived clients" is checked
+
+--- 2026-10-27 15:43:17
+active and archived together, defaults are OK
+
+--- 2026-10-27 15:45:50
+<task-notification>
+<task-id>blc7ht8ma</task-id>
+<tool-use-id>toolu_01JPwAz5wkZJH4PJSHQuJsPp</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-vbb-IdeaProjects-creditsAI/cc116479-9bad-4a4d-a8d8-7a0977a325a6/tasks/blc7ht8ma.output</output-file>
+<status>completed</status>
+<summary>Background command "Run backend tests in background" completed (exit code 0)</summary>
+</task-notification>
