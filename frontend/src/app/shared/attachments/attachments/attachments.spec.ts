@@ -3,21 +3,21 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { of, throwError } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
-import { ConfirmDialog } from '../../../shared/confirm-dialog/confirm-dialog';
-import { NotificationService } from '../../../shared/notification/notification.service';
+import { ConfirmDialog } from '../../confirm-dialog/confirm-dialog';
+import { NotificationService } from '../../notification/notification.service';
 import { AttachmentPreviewDialog } from '../attachment-preview-dialog/attachment-preview-dialog';
 import { Attachment } from '../attachment.model';
-import { ClientService } from '../client.service';
-import { ClientAttachments } from './client-attachments';
+import { AttachmentService } from '../attachment.service';
+import { Attachments } from './attachments';
 
-describe('ClientAttachments', () => {
-  let fixture: ComponentFixture<ClientAttachments>;
+describe('Attachments', () => {
+  let fixture: ComponentFixture<Attachments>;
   let el: HTMLElement;
   let service: {
-    listAttachments: ReturnType<typeof vi.fn>;
-    downloadAttachment: ReturnType<typeof vi.fn>;
-    uploadAttachments: ReturnType<typeof vi.fn>;
-    deleteAttachment: ReturnType<typeof vi.fn>;
+    list: ReturnType<typeof vi.fn>;
+    download: ReturnType<typeof vi.fn>;
+    upload: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
   };
   let dialog: { open: ReturnType<typeof vi.fn> };
   let notification: { success: ReturnType<typeof vi.fn> };
@@ -40,7 +40,11 @@ describe('ClientAttachments', () => {
    * Renders the section for the given files and role.
    * @param options the attachments the backend returns and whether the user is an ADMIN
    */
-  async function render(options: { list?: Attachment[]; admin?: boolean }): Promise<void> {
+  async function render(options: {
+    list?: Attachment[];
+    admin?: boolean;
+    resource?: 'clients' | 'credits';
+  }): Promise<void> {
     urlCounter = 0;
     createUrl = vi.fn(() => `blob:${++urlCounter}`);
     revokeUrl = vi.fn();
@@ -49,24 +53,25 @@ describe('ClientAttachments', () => {
       Object.assign(URL, { createObjectURL: createUrl, revokeObjectURL: revokeUrl }),
     );
     service = {
-      listAttachments: vi.fn().mockReturnValue(of(options.list ?? [])),
-      downloadAttachment: vi.fn().mockReturnValue(of(new Blob(['x']))),
-      uploadAttachments: vi.fn(),
-      deleteAttachment: vi.fn(),
+      list: vi.fn().mockReturnValue(of(options.list ?? [])),
+      download: vi.fn().mockReturnValue(of(new Blob(['x']))),
+      upload: vi.fn(),
+      delete: vi.fn(),
     };
     dialog = { open: vi.fn() };
     notification = { success: vi.fn() };
     TestBed.configureTestingModule({
-      imports: [ClientAttachments],
+      imports: [Attachments],
       providers: [
-        { provide: ClientService, useValue: service },
+        { provide: AttachmentService, useValue: service },
         { provide: MatDialog, useValue: dialog },
         { provide: NotificationService, useValue: notification },
         { provide: AuthService, useValue: { isAdmin: () => options.admin ?? false } },
       ],
     });
-    fixture = TestBed.createComponent(ClientAttachments);
-    fixture.componentRef.setInput('clientId', 7);
+    fixture = TestBed.createComponent(Attachments);
+    fixture.componentRef.setInput('resource', options.resource ?? 'clients');
+    fixture.componentRef.setInput('ownerId', 7);
     await fixture.whenStable();
     el = fixture.nativeElement as HTMLElement;
   }
@@ -93,9 +98,9 @@ describe('ClientAttachments', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('should list the files of the client with size and uploader', async () => {
+  it('should list the files of the owner with size and uploader', async () => {
     await render({ list: [pdf] });
-    expect(service.listAttachments).toHaveBeenCalledWith(7);
+    expect(service.list).toHaveBeenCalledWith('clients', 7);
     const text = el.querySelector('mat-list-item')!.textContent!;
     expect(text).toContain('contract.pdf');
     expect(text).toContain('2 KB');
@@ -105,6 +110,15 @@ describe('ClientAttachments', () => {
   it('should show an empty message without files', async () => {
     await render({});
     expect(el.textContent).toContain('No files attached.');
+  });
+
+  it('should use the credits endpoints and say "credit" in limit messages', async () => {
+    await render({ list: [pdf], admin: true, resource: 'credits' });
+    expect(service.list).toHaveBeenCalledWith('credits', 7);
+    const many = Array.from({ length: 30 }, (_, i) => new File(['x'], `n${i}.txt`));
+    await pick(many);
+    expect(service.upload).not.toHaveBeenCalled();
+    expect(el.querySelector('.errors')!.textContent).toContain('A credit can have at most 30');
   });
 
   describe('as USER', () => {
@@ -122,7 +136,7 @@ describe('ClientAttachments', () => {
 
       byLabel('Download contract.pdf')!.click();
 
-      expect(service.downloadAttachment).toHaveBeenCalledWith(7, 1);
+      expect(service.download).toHaveBeenCalledWith('clients', 7, 1);
       expect(click).toHaveBeenCalled();
       expect(createUrl).toHaveBeenCalledTimes(1);
       expect(revokeUrl).toHaveBeenCalledWith('blob:1');
@@ -135,7 +149,7 @@ describe('ClientAttachments', () => {
 
       el.querySelector<HTMLButtonElement>('button.file-name')!.click();
 
-      expect(service.downloadAttachment).toHaveBeenCalledWith(7, 1);
+      expect(service.download).toHaveBeenCalledWith('clients', 7, 1);
       expect(click).toHaveBeenCalled();
       expect(revokeUrl).toHaveBeenCalledWith('blob:1');
       click.mockRestore();
@@ -154,12 +168,12 @@ describe('ClientAttachments', () => {
     it('should upload valid files immediately and add them sorted by name', async () => {
       await render({ list: [pdf], admin: true });
       const added: Attachment = { ...pdf, id: 9, fileName: 'a.txt', contentType: 'text/plain' };
-      service.uploadAttachments.mockReturnValue(of([added]));
+      service.upload.mockReturnValue(of([added]));
       const file = new File(['x'], 'a.txt', { type: 'text/plain' });
 
       await pick([file]);
 
-      expect(service.uploadAttachments).toHaveBeenCalledWith(7, [file]);
+      expect(service.upload).toHaveBeenCalledWith('clients', 7, [file]);
       const names = Array.from(el.querySelectorAll('[matListItemTitle]')).map((n) =>
         n.textContent!.trim(),
       );
@@ -170,7 +184,7 @@ describe('ClientAttachments', () => {
     it('should not upload and should explain when a limit is exceeded', async () => {
       await render({ list: [pdf], admin: true });
       await pick([new File(['x'], 'contract.pdf'), new File(['x'], 'bad.exe')]);
-      expect(service.uploadAttachments).not.toHaveBeenCalled();
+      expect(service.upload).not.toHaveBeenCalled();
       const text = el.querySelector('.errors')!.textContent!;
       expect(text).toContain('already attached');
       expect(text).toContain('not allowed');
@@ -181,15 +195,13 @@ describe('ClientAttachments', () => {
       const list = [1, 2, 3, 4].map((id) => ({ ...big, id, fileName: `f${id}.pdf` }));
       await render({ list, admin: true });
       await pick([new File(['x'], 'more.pdf')]);
-      expect(service.uploadAttachments).not.toHaveBeenCalled();
+      expect(service.upload).not.toHaveBeenCalled();
       expect(el.querySelector('.errors')!.textContent).toContain('at most 20 MB');
     });
 
     it('should keep the list when an upload fails', async () => {
       await render({ list: [pdf], admin: true });
-      service.uploadAttachments.mockReturnValue(
-        throwError(() => new HttpErrorResponse({ status: 413 })),
-      );
+      service.upload.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 413 })));
       await pick([new File(['x'], 'a.txt')]);
       expect(notification.success).not.toHaveBeenCalled();
       expect(el.querySelectorAll('mat-list-item')).toHaveLength(1);
@@ -205,18 +217,18 @@ describe('ClientAttachments', () => {
       const config = dialog.open.mock.calls[0];
       expect(config[0]).toBe(ConfirmDialog);
       expect(config[1].data.message).toContain('permanently deleted');
-      expect(service.deleteAttachment).not.toHaveBeenCalled();
+      expect(service.delete).not.toHaveBeenCalled();
     });
 
     it('should delete after confirmation and remove the row and its preview URL', async () => {
       await render({ list: [png], admin: true });
       dialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      service.deleteAttachment.mockReturnValue(of(undefined));
+      service.delete.mockReturnValue(of(undefined));
 
       byLabel('Delete photo.png')!.click();
       await fixture.whenStable();
 
-      expect(service.deleteAttachment).toHaveBeenCalledWith(7, 2);
+      expect(service.delete).toHaveBeenCalledWith('clients', 7, 2);
       expect(el.querySelectorAll('mat-list-item')).toHaveLength(0);
       expect(revokeUrl).toHaveBeenCalledWith('blob:1');
     });
@@ -225,8 +237,8 @@ describe('ClientAttachments', () => {
   describe('pictures', () => {
     it('should show a thumbnail for JPEG/PNG/GIF/WEBP only', async () => {
       await render({ list: [pdf, png, heic] });
-      expect(service.downloadAttachment).toHaveBeenCalledTimes(1);
-      expect(service.downloadAttachment).toHaveBeenCalledWith(7, 2);
+      expect(service.download).toHaveBeenCalledTimes(1);
+      expect(service.download).toHaveBeenCalledWith('clients', 7, 2);
       const images = el.querySelectorAll('img');
       expect(images).toHaveLength(1);
       expect(images[0].getAttribute('src')).toBe('blob:1');

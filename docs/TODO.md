@@ -40,6 +40,12 @@ _Last updated: 2026-10-28. Infrastructure, backend skeleton, the Client feature 
   - Attachments are physically deleted, the one exception to soft delete.
   - Picture preview for JPEG/PNG/GIF/WEBP.
   - Hourly cleanup job: it deletes stale `.deleted-*`/`.upload-*.tmp` files and only reports orphans.
+- [~] **Credit attachments** (decided 2026-10-28), same as client attachments except:
+  - A USER attaches files only in the first save of a credit (multipart create on `/credits/new`). After that only ADMIN adds or removes files, whatever the credit's status (ACTIVE included). An archived credit's attachments, and those of a credit of an archived client, are ADMIN-only.
+  - Same types and limits (`app.attachments`), counted **per credit**, separately from the client's files.
+  - Disk layout: `/data/attachments/clients/{clientId}/` and `/data/attachments/credits/{creditId}/`. The existing client folders move from `/data/attachments/{clientId}` to `clients/` once, at startup.
+  - Separate `credit_attachments` table, with a shared storage, type-check and cleanup core.
+  - Credit files appear on the credit detail page only, not on the client page.
 - [ ] **Attachments, small open choices:**
   - Should the 409 quote the uploaded name instead of the stored lower-case one?
   - The 413 for more than 32 multipart parts talks about size limits.

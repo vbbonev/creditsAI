@@ -147,9 +147,9 @@ class AttachmentApiIntegrationTest {
                 file("zé.txt", SampleFiles.txt()));
 
         // then: on disk under the client folder with their real names
-        assertThat(STORAGE.resolve(id + "/contract.pdf")).exists();
-        assertThat(STORAGE.resolve(id + "/photo.png")).exists();
-        assertThat(STORAGE.resolve(id + "/zé.txt")).exists();
+        assertThat(STORAGE.resolve("clients/" + id + "/contract.pdf")).exists();
+        assertThat(STORAGE.resolve("clients/" + id + "/photo.png")).exists();
+        assertThat(STORAGE.resolve("clients/" + id + "/zé.txt")).exists();
 
         // and: listed sorted by name with detected types and the uploader
         mockMvc.perform(get("/api/clients/" + id + "/attachments").with(USER))
@@ -171,7 +171,7 @@ class AttachmentApiIntegrationTest {
         long id = createClientOk(file("Report.PDF", SampleFiles.pdf()));
 
         // then: disk and listing use the lower-case name
-        assertThat(STORAGE.resolve(String.valueOf(id)).toFile().list()).containsExactly("report.pdf");
+        assertThat(STORAGE.resolve("clients/" + id).toFile().list()).containsExactly("report.pdf");
         String body = mockMvc.perform(get("/api/clients/" + id + "/attachments").with(USER))
                 .andExpect(jsonPath("$[0].fileName").value("report.pdf"))
                 .andReturn().getResponse().getContentAsString();
@@ -363,7 +363,7 @@ class AttachmentApiIntegrationTest {
         // then: stored under the lower-case name
         assertThat(again.getResponse().getStatus()).isEqualTo(201);
         // (names are listed, because the test machine's file system may be case-insensitive)
-        assertThat(STORAGE.resolve(String.valueOf(id)).toFile().list()).containsExactly("a.txt");
+        assertThat(STORAGE.resolve("clients/" + id).toFile().list()).containsExactly("a.txt");
     }
 
     @Test
@@ -437,8 +437,8 @@ class AttachmentApiIntegrationTest {
                 .andExpect(status().isNoContent());
 
         // then: row and file are gone, the other file stays
-        assertThat(STORAGE.resolve(id + "/a.txt")).doesNotExist();
-        assertThat(STORAGE.resolve(id + "/b.txt")).exists();
+        assertThat(STORAGE.resolve("clients/" + id + "/a.txt")).doesNotExist();
+        assertThat(STORAGE.resolve("clients/" + id + "/b.txt")).exists();
         mockMvc.perform(get("/api/clients/" + id + "/attachments").with(USER))
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].fileName").value("b.txt"));
@@ -460,7 +460,7 @@ class AttachmentApiIntegrationTest {
                 .andExpect(status().isNotFound());
         mockMvc.perform(delete("/api/clients/" + second + "/attachments/" + attachmentId).with(ADMIN))
                 .andExpect(status().isNotFound());
-        assertThat(STORAGE.resolve(first + "/a.txt")).exists();
+        assertThat(STORAGE.resolve("clients/" + first + "/a.txt")).exists();
     }
 
     @Test
@@ -471,7 +471,7 @@ class AttachmentApiIntegrationTest {
         String path = "/api/clients/" + id + "/attachments";
 
         // then: files untouched; USER gets 404 on list and download
-        assertThat(STORAGE.resolve(id + "/a.txt")).exists();
+        assertThat(STORAGE.resolve("clients/" + id + "/a.txt")).exists();
         mockMvc.perform(get(path).with(USER)).andExpect(status().isNotFound());
         mockMvc.perform(get(path + "/1/content").with(USER)).andExpect(status().isNotFound());
 

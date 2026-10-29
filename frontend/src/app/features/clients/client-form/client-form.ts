@@ -10,15 +10,13 @@ import {
   MatDialogRef,
   MatDialogTitle,
 } from '@angular/material/dialog';
-import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { applyServerErrors } from '../../../shared/forms/server-errors';
-import { FileSizePipe, formatFileSize } from '../../../shared/pipes/file-size.pipe';
 import { hasFieldErrors } from '../../../shared/models/problem-detail';
+import { PendingFiles } from '../../../shared/attachments/pending-files/pending-files';
+import { validateFiles } from '../../../shared/attachments/attachment.validation';
 import { NotBlankValidator } from '../../../shared/validators/not-blank.validator';
-import { ATTACHMENT_ACCEPT, ATTACHMENT_LIMITS } from '../attachment.constants';
-import { validateFiles } from '../attachment.validation';
 import { Client, CLIENT_MAX_LENGTH, ClientRequest } from '../client.model';
 import { ClientService } from '../client.service';
 
@@ -43,7 +41,6 @@ interface ClientFormModel {
  */
 @Component({
   imports: [
-    FileSizePipe,
     FormsModule,
     MatButtonModule,
     MatDialogActions,
@@ -51,9 +48,9 @@ interface ClientFormModel {
     MatDialogContent,
     MatDialogTitle,
     MatFormFieldModule,
-    MatIconModule,
     MatInputModule,
     NotBlankValidator,
+    PendingFiles,
   ],
   selector: 'app-client-form',
   styleUrl: './client-form.scss',
@@ -81,36 +78,11 @@ export class ClientForm {
   /** True while the save request is running; disables the buttons. */
   protected readonly saving = signal(false);
 
-  /** Value for the file input's `accept` attribute. */
-  protected readonly accept = ATTACHMENT_ACCEPT;
-
-  /** The limits as text, shown under the file picker. */
-  protected readonly limitsText = `Up to ${ATTACHMENT_LIMITS.maxFiles} files, ${formatFileSize(ATTACHMENT_LIMITS.maxFileBytes)} each, ${formatFileSize(ATTACHMENT_LIMITS.maxTotalBytes)} in total.`;
-
   /** Files chosen for a new client; sent together with the create request. */
   protected readonly files = signal<File[]>([]);
 
   /** Problems of the chosen files; any problem blocks the submit button. */
   protected readonly fileErrors = computed(() => validateFiles(this.files()));
-
-  /**
-   * Adds the chosen files to the selection (the picker is shown only when creating).
-   * @param event the change event of the file input
-   */
-  protected onFilesSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const added = Array.from(input.files ?? []);
-    input.value = '';
-    this.files.update((current) => [...current, ...added]);
-  }
-
-  /**
-   * Removes one file from the selection.
-   * @param file the file to remove
-   */
-  protected removeFile(file: File): void {
-    this.files.update((current) => current.filter((f) => f !== file));
-  }
 
   /**
    * Saves the client if the form is valid, then closes the dialog with the result.

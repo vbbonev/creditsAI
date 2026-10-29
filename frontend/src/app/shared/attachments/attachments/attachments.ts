@@ -6,9 +6,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { AuthService } from '../../../core/auth/auth.service';
-import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
-import { NotificationService } from '../../../shared/notification/notification.service';
-import { FileSizePipe, formatFileSize } from '../../../shared/pipes/file-size.pipe';
+import { ConfirmDialog, ConfirmDialogData } from '../../confirm-dialog/confirm-dialog';
+import { NotificationService } from '../../notification/notification.service';
+import { FileSizePipe, formatFileSize } from '../../pipes/file-size.pipe';
 import {
   AttachmentPreviewData,
   AttachmentPreviewDialog,
@@ -16,10 +16,12 @@ import {
 import { ATTACHMENT_ACCEPT, ATTACHMENT_LIMITS } from '../attachment.constants';
 import { Attachment } from '../attachment.model';
 import { fileIcon, isPreviewable, validateFiles } from '../attachment.validation';
-import { ClientService } from '../client.service';
+import { AttachmentOwner } from '../attachment.validation';
+import { AttachmentResource, AttachmentService } from '../attachment.service';
 
 /**
- * Attachments section of the client detail page. Everybody can list and download files; JPEG, PNG,
+ * Attachments section of a client or credit detail page (a reusable component parameterized by
+ * the resource and the owner id). Everybody can list and download files; JPEG, PNG,
  * GIF and WEBP pictures get a thumbnail and a larger preview dialog. Only ADMIN sees Upload and
  * Delete (the backend enforces this too). File bytes are fetched with the bearer token and shown
  * through object URLs, which are revoked when a file is deleted and when the component is destroyed.
@@ -33,17 +35,20 @@ import { ClientService } from '../client.service';
     MatListModule,
     MatProgressBarModule,
   ],
-  selector: 'app-client-attachments',
-  styleUrl: './client-attachments.scss',
-  templateUrl: './client-attachments.html',
+  selector: 'app-attachments',
+  styleUrl: './attachments.scss',
+  templateUrl: './attachments.html',
 })
-export class ClientAttachments implements OnInit {
-  private readonly clientService = inject(ClientService);
+export class Attachments implements OnInit {
+  private readonly attachmentService = inject(AttachmentService);
   private readonly dialog = inject(MatDialog);
   private readonly notification = inject(NotificationService);
 
-  /** The client whose files are shown. */
-  readonly clientId = input.required<number>();
+  /** The kind of record whose files are shown. */
+  readonly resource = input.required<AttachmentResource>();
+
+  /** The id of the client or credit whose files are shown. */
+  readonly ownerId = input.required<number>();
 
   /** Whether the current user may upload and delete. */
   protected readonly isAdmin = inject(AuthService).isAdmin();
@@ -57,7 +62,7 @@ export class ClientAttachments implements OnInit {
   /** The limit sizes formatted for the hint text. */
   protected readonly limitsText = `Up to ${ATTACHMENT_LIMITS.maxFiles} files, ${formatFileSize(ATTACHMENT_LIMITS.maxFileBytes)} each, ${formatFileSize(ATTACHMENT_LIMITS.maxTotalBytes)} in total.`;
 
-  /** The client's files. */
+  /** The owner's files. */
   protected readonly attachments = signal<Attachment[]>([]);
 
   /** True while the list is loading. */
@@ -77,10 +82,10 @@ export class ClientAttachments implements OnInit {
   }
 
   /**
-   * Loads the files of the client.
+   * Loads the files of the owner.
    */
   ngOnInit(): void {
-    this.clientService.listAttachments(this.clientId()).subscribe({
+    this.attachmentService.list(this.resource(), this.ownerId()).subscribe({
       next: (list) => {
         this.attachments.set(list);
         this.loading.set(false);
@@ -88,6 +93,14 @@ export class ClientAttachments implements OnInit {
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  /**
+   * Names the owner in messages.
+   * @returns "client" or "credit"
+   */
+  private owner(): AttachmentOwner {
+    return this.resource() === 'credits' ? 'credit' : 'client';
   }
 
   /**
@@ -110,13 +123,13 @@ export class ClientAttachments implements OnInit {
     if (files.length === 0) {
       return;
     }
-    const errors = validateFiles(files, this.attachments());
+    const errors = validateFiles(files, this.attachments(), this.owner());
     this.errors.set(errors);
     if (errors.length > 0) {
       return;
     }
     this.busy.set(true);
-    this.clientService.uploadAttachments(this.clientId(), files).subscribe({
+    this.attachmentService.upload(this.resource(), this.ownerId(), files).subscribe({
       next: (created) => {
         this.attachments.update((list) =>
           [...list, ...created].sort((a, b) => a.fileName.localeCompare(b.fileName)),
@@ -137,7 +150,7 @@ export class ClientAttachments implements OnInit {
    */
   protected download(attachment: Attachment): void {
     this.busy.set(true);
-    this.clientService.downloadAttachment(this.clientId(), attachment.id).subscribe({
+    this.attachmentService.download(this.resource(), this.ownerId(), attachment.id).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -184,7 +197,7 @@ export class ClientAttachments implements OnInit {
           return;
         }
         this.busy.set(true);
-        this.clientService.deleteAttachment(this.clientId(), attachment.id).subscribe({
+        this.attachmentService.delete(this.resource(), this.ownerId(), attachment.id).subscribe({
           next: () => {
             this.revokeThumbnail(attachment.id);
             this.attachments.update((list) => list.filter((a) => a.id !== attachment.id));
@@ -204,7 +217,7 @@ export class ClientAttachments implements OnInit {
     if (!isPreviewable(attachment.contentType)) {
       return;
     }
-    this.clientService.downloadAttachment(this.clientId(), attachment.id).subscribe({
+    this.attachmentService.download(this.resource(), this.ownerId(), attachment.id).subscribe({
       next: (blob) =>
         this.thumbnails.update((urls) => ({ ...urls, [attachment.id]: URL.createObjectURL(blob) })),
     });

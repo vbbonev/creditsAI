@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../../../shared/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { ClientForm } from '../client-form/client-form';
 import { Client } from '../client.model';
+import { AttachmentService } from '../../../shared/attachments/attachment.service';
 import { ClientService } from '../client.service';
 import { ClientDetail } from './client-detail';
 
@@ -18,8 +19,8 @@ describe('ClientDetail', () => {
     get: ReturnType<typeof vi.fn>;
     archive: ReturnType<typeof vi.fn>;
     restore: ReturnType<typeof vi.fn>;
-    listAttachments: ReturnType<typeof vi.fn>;
   };
+  let attachmentService: { list: ReturnType<typeof vi.fn> };
   let dialog: { open: ReturnType<typeof vi.fn> };
   let notification: { success: ReturnType<typeof vi.fn> };
   let navigate: ReturnType<typeof vi.spyOn>;
@@ -55,8 +56,8 @@ describe('ClientDetail', () => {
         ),
       archive: vi.fn(),
       restore: vi.fn(),
-      listAttachments: vi.fn().mockReturnValue(of([])),
     };
+    attachmentService = { list: vi.fn().mockReturnValue(of([])) };
     dialog = { open: vi.fn() };
     notification = { success: vi.fn() };
     TestBed.configureTestingModule({
@@ -68,6 +69,7 @@ describe('ClientDetail', () => {
           useValue: { snapshot: { paramMap: convertToParamMap({ id: options.id ?? '7' }) } },
         },
         { provide: ClientService, useValue: clientService },
+        { provide: AttachmentService, useValue: attachmentService },
         { provide: MatDialog, useValue: dialog },
         { provide: NotificationService, useValue: notification },
         { provide: AuthService, useValue: { isAdmin: () => options.admin ?? false } },
@@ -105,8 +107,8 @@ describe('ClientDetail', () => {
 
   it('should show the attachments section of the loaded client', async () => {
     await render({});
-    expect(clientService.listAttachments).toHaveBeenCalledWith(7);
-    expect(el.querySelector('app-client-attachments')).not.toBeNull();
+    expect(attachmentService.list).toHaveBeenCalledWith('clients', 7);
+    expect(el.querySelector('app-attachments')).not.toBeNull();
   });
 
   it('should offer a link back to the list', async () => {

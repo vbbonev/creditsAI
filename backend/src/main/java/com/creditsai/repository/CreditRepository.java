@@ -2,10 +2,12 @@ package com.creditsai.repository;
 
 import com.creditsai.model.Credit;
 import com.creditsai.model.CreditStatus;
+import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -64,4 +66,15 @@ public interface CreditRepository extends JpaRepository<Credit, Long> {
      * @return the credit, or empty if missing, archived, or owned by an archived client
      */
     Optional<Credit> findByIdAndArchivedFalseAndClientArchivedFalse(Long id);
+
+    /**
+     * Loads a credit (archived or not) and locks its row until the transaction ends, so parallel
+     * changes to its attachments are applied one after the other and the limits hold.
+     *
+     * @param id the credit id
+     * @return the locked credit, or empty if missing
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select cr from Credit cr where cr.id = :id")
+    Optional<Credit> findByIdForUpdate(@Param("id") Long id);
 }

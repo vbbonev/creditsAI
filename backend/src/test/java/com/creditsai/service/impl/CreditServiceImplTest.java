@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.creditsai.dto.AttachmentUpload;
 import com.creditsai.dto.CreditCalculationRequest;
 import com.creditsai.dto.CreditRequest;
 import com.creditsai.dto.CreditResponse;
@@ -53,11 +54,15 @@ class CreditServiceImplTest {
     @Mock
     private ClientRepository clientRepository;
 
+    @Mock
+    private AttachmentIngestor attachmentIngestor;
+
     private CreditServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CreditServiceImpl(creditRepository, clientRepository, Mappers.getMapper(CreditMapper.class));
+        service = new CreditServiceImpl(creditRepository, clientRepository, Mappers.getMapper(CreditMapper.class),
+                attachmentIngestor);
     }
 
     private static Client client(long id, boolean archived) {
@@ -82,7 +87,8 @@ class CreditServiceImplTest {
         Credit credit = new Credit();
         credit.assignTo(client);
         ReflectionTestUtils.setField(credit, "id", 7L);
-        service = new CreditServiceImpl(creditRepository, clientRepository, Mappers.getMapper(CreditMapper.class));
+        service = new CreditServiceImpl(creditRepository, clientRepository, Mappers.getMapper(CreditMapper.class),
+                attachmentIngestor);
         PaymentPlan plan = PaymentPlanCalculator.calculate(new BigDecimal("10000"), new BigDecimal("12"), START,
                 START.plusMonths(months));
         CreditMapper mapper = Mappers.getMapper(CreditMapper.class);
@@ -150,6 +156,51 @@ class CreditServiceImplTest {
         assertThat(response.hasCollateral()).isFalse();
         assertThat(response.collateralValue()).isNull();
         assertThat(response.collateralDescription()).isNull();
+    }
+
+    @Test
+    void createWithFiles_validRequest_savesCreditWithPlanThenAttachesFiles() {
+        // given
+        given(clientRepository.findByIdAndArchivedFalse(1L)).willReturn(Optional.of(client(1, false)));
+        given(creditRepository.saveAndFlush(any(Credit.class))).willAnswer(i -> i.getArgument(0));
+        List<AttachmentUpload> uploads = List.of(new AttachmentUpload("a.txt", 1, null));
+
+        // when
+        CreditResponse response = service.create(request(1, 12, true), uploads, "user1");
+
+        // then
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(creditRepository, attachmentIngestor);
+        order.verify(creditRepository).saveAndFlush(any(Credit.class));
+        order.verify(attachmentIngestor).attach(any(Credit.class), eq(uploads), eq("user1"));
+        order.verify(creditRepository).saveAndFlush(any(Credit.class));
+        assertThat(response.plan().rows()).hasSize(12);
+        assertThat(response.status()).isEqualTo(CreditStatus.ACTIVE);
+    }
+
+    @Test
+    void createWithFiles_fileRejected_propagatesSoTheTransactionRollsBack() {
+        // given
+        given(clientRepository.findByIdAndArchivedFalse(1L)).willReturn(Optional.of(client(1, false)));
+        given(creditRepository.saveAndFlush(any(Credit.class))).willAnswer(i -> i.getArgument(0));
+        org.mockito.Mockito.doThrow(new BusinessRuleException("A credit can have at most 30 files."))
+                .when(attachmentIngestor).attach(any(Credit.class), any(), any());
+
+        // when / then
+        assertThatThrownBy(() -> service.create(request(1, 12, false), List.of(), "user1"))
+                .isInstanceOf(BusinessRuleException.class);
+        verify(creditRepository, org.mockito.Mockito.times(1)).saveAndFlush(any(Credit.class));
+    }
+
+    @Test
+    void createWithFiles_archivedClient_throwsNotFoundBeforeAnyFileIsTouched() {
+        // given
+        given(clientRepository.findByIdAndArchivedFalse(1L)).willReturn(Optional.empty());
+
+        // when / then
+        assertThatThrownBy(() -> service.create(request(1, 12, false), List.of(), "user1"))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verifyNoInteractions(attachmentIngestor);
+        verify(creditRepository, never()).saveAndFlush(any());
     }
 
     @Test

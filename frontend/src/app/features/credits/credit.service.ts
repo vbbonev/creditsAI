@@ -78,6 +78,20 @@ export class CreditService {
   }
 
   /**
+   * Registers a new credit together with its files as one multipart request (atomic: if a file
+   * is rejected, the credit is not created).
+   * @param request the credit data, sent as the JSON part `credit`
+   * @param files the files, sent as the parts `files` (may be empty)
+   * @returns Observable emitting the created credit
+   */
+  createWithFiles(request: CreditRequest, files: readonly File[]): Observable<Credit> {
+    const body = new FormData();
+    body.append('credit', new Blob([JSON.stringify(request)], { type: 'application/json' }));
+    files.forEach((file) => body.append('files', file, file.name));
+    return this.http.post<Credit>(this.baseUrl, body);
+  }
+
+  /**
    * Replaces all editable fields of a credit and regenerates its plan (ADMIN only).
    * @param id the credit id
    * @param request the credit data

@@ -1,6 +1,7 @@
 package com.creditsai.model;
 
 import com.creditsai.exception.BusinessRuleException;
+import com.creditsai.exception.ResourceNotFoundException;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,8 +46,8 @@ import org.hibernate.generator.EventType;
 @Table(name = "credits")
 @Getter
 @NoArgsConstructor
-@ToString(exclude = {"client", "payments"})
-public class Credit {
+@ToString(exclude = {"client", "payments", "attachments"})
+public class Credit implements AttachmentOwner {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -136,6 +137,78 @@ public class Credit {
      */
     public List<CreditPayment> getPayments() {
         return Collections.unmodifiableList(payments);
+    }
+
+    /**
+     * Files attached to this credit. Like client attachments, they are physically deleted
+     * (orphan removal) - an approved exception to the soft-delete rule.
+     */
+    @Getter(AccessLevel.NONE)
+    @OneToMany(mappedBy = "credit", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CreditAttachment> attachments = new ArrayList<>();
+
+    /**
+     * Returns the attachments as a read-only view; change them only with {@link #attach} and
+     * {@link #removeAttachment}.
+     *
+     * @return the attachments in no particular order
+     */
+    public List<CreditAttachment> getAttachments() {
+        return Collections.unmodifiableList(attachments);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public AttachmentOwnerType attachmentOwnerType() {
+        return AttachmentOwnerType.CREDIT;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void ensureCanAttach(String fileName, long sizeBytes, int maxFiles, long maxTotalBytes) {
+        AttachmentRules.ensureCanAttach(attachments, AttachmentOwnerType.CREDIT, fileName, sizeBytes, maxFiles,
+                maxTotalBytes);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CreditAttachment attach(AttachmentDraft draft, int maxFiles, long maxTotalBytes) {
+        ensureCanAttach(draft.fileName(), draft.sizeBytes(), maxFiles, maxTotalBytes);
+        CreditAttachment attachment = CreditAttachment.builder()
+                .fileName(draft.fileName())
+                .contentType(draft.contentType())
+                .sizeBytes(draft.sizeBytes())
+                .sha256(draft.sha256())
+                .uploadedBy(draft.uploadedBy())
+                .build();
+        attachment.assignTo(this);
+        attachments.add(attachment);
+        return attachment;
+    }
+
+    /**
+     * Removes an attachment; its row is deleted when the transaction commits.
+     *
+     * @param attachmentId the id of the attachment
+     * @return the removed attachment, so the caller can delete its file
+     * @throws ResourceNotFoundException if this credit has no attachment with that id
+     */
+    public CreditAttachment removeAttachment(Long attachmentId) {
+        CreditAttachment found = findAttachment(attachmentId);
+        attachments.remove(found);
+        return found;
+    }
+
+    /**
+     * Finds one of this credit's attachments.
+     *
+     * @param attachmentId the id of the attachment
+     * @return the attachment
+     * @throws ResourceNotFoundException if this credit has no attachment with that id (it may belong
+     *         to another credit)
+     */
+    public CreditAttachment findAttachment(Long attachmentId) {
+        return AttachmentRules.find(attachments, attachmentId);
     }
 
     /**

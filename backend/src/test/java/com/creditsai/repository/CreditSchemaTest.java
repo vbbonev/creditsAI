@@ -28,6 +28,7 @@ class CreditSchemaTest {
 
     @BeforeEach
     void setUp() {
+        jdbc.update("delete from credit_attachments");
         jdbc.update("delete from credit_payments");
         jdbc.update("delete from credits");
         jdbc.update("delete from client_attachments");
@@ -199,6 +200,56 @@ class CreditSchemaTest {
     @Test
     void insert_amountWithElevenIntegerDigits_isRejected() {
         assertThatThrownBy(() -> insertCredit("10000000000", null, "false", "2026-01-01", "2026-02-01", "5", "ACTIVE"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private void insertAttachment(long creditId, String fileName) {
+        jdbc.update("insert into credit_attachments (credit_id, file_name, content_type, size_bytes, sha256, "
+                + "uploaded_by) values (?, ?, 'text/plain', 1, ?, 'u')", creditId, fileName, "0".repeat(64));
+    }
+
+    @Test
+    void creditAttachments_sameNameInTheSameCredit_isRejected() {
+        // given
+        long credit = validCredit();
+        insertAttachment(credit, "a.pdf");
+
+        // when / then
+        assertThatThrownBy(() -> insertAttachment(credit, "a.pdf")).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void creditAttachments_sameNameInAnotherCredit_isAccepted() {
+        // given
+        long first = validCredit();
+        long second = validCredit();
+
+        // when / then
+        insertAttachment(first, "a.pdf");
+        insertAttachment(second, "a.pdf");
+        assertThat(jdbc.queryForObject("select count(*) from credit_attachments", Long.class)).isEqualTo(2);
+    }
+
+    @Test
+    void creditAttachments_nameDifferingOnlyInCase_isAcceptedByThePlainConstraint() {
+        // given: lower-casing is the sanitizer's job; the constraint is a plain unique (credit_id, file_name)
+        long credit = validCredit();
+
+        // when / then
+        insertAttachment(credit, "a.pdf");
+        insertAttachment(credit, "A.pdf");
+    }
+
+    @Test
+    void creditAttachments_unknownCredit_isRejected() {
+        assertThatThrownBy(() -> insertAttachment(-1, "a.pdf")).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void creditAttachments_negativeSize_isRejected() {
+        long credit = validCredit();
+        assertThatThrownBy(() -> jdbc.update("insert into credit_attachments (credit_id, file_name, content_type, "
+                + "size_bytes, sha256, uploaded_by) values (?, 'a', 'text/plain', -1, 'x', 'u')", credit))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

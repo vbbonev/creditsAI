@@ -1,5 +1,6 @@
 package com.creditsai.service.impl;
 
+import com.creditsai.dto.AttachmentUpload;
 import com.creditsai.dto.CreditCalculationRequest;
 import com.creditsai.dto.CreditRequest;
 import com.creditsai.dto.CreditResponse;
@@ -13,6 +14,7 @@ import com.creditsai.model.CreditStatus;
 import com.creditsai.repository.ClientRepository;
 import com.creditsai.repository.CreditRepository;
 import com.creditsai.service.CreditService;
+import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -32,6 +34,7 @@ public class CreditServiceImpl implements CreditService {
     private final CreditRepository creditRepository;
     private final ClientRepository clientRepository;
     private final CreditMapper creditMapper;
+    private final AttachmentIngestor attachmentIngestor;
 
     /** {@inheritDoc} */
     @Override
@@ -45,13 +48,38 @@ public class CreditServiceImpl implements CreditService {
     @Override
     @Transactional
     public CreditResponse create(CreditRequest request) {
+        return creditMapper.toResponse(creditRepository.saveAndFlush(buildCredit(request)));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The credit is saved first to get its id (the folder name); a rejected file throws, and the
+     * rollback removes the row and the files already stored.
+     */
+    @Override
+    @Transactional
+    public CreditResponse create(CreditRequest request, List<AttachmentUpload> uploads, String uploadedBy) {
+        Credit saved = creditRepository.saveAndFlush(buildCredit(request));
+        attachmentIngestor.attach(saved, uploads, uploadedBy);
+        return creditMapper.toResponse(creditRepository.saveAndFlush(saved));
+    }
+
+    /**
+     * Builds a new credit from a request: client, input fields, collateral and the calculated plan.
+     *
+     * @param request the validated credit data
+     * @return the credit, not yet saved
+     * @throws ResourceNotFoundException if the client does not exist or is archived
+     */
+    private Credit buildCredit(CreditRequest request) {
         Client client = clientRepository.findByIdAndArchivedFalse(request.clientId())
                 .orElseThrow(() -> clientNotFound(request.clientId()));
         Credit credit = creditMapper.toEntity(request);
         credit.assignTo(client);
         credit.applyCollateral(request.hasCollateral(), request.collateralValue(), request.collateralDescription());
         applyPlan(credit, request);
-        return creditMapper.toResponse(creditRepository.saveAndFlush(credit));
+        return credit;
     }
 
     /** {@inheritDoc} */

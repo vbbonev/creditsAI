@@ -6,6 +6,7 @@ import com.creditsai.TestcontainersConfiguration;
 import com.creditsai.model.Client;
 import com.creditsai.model.Credit;
 import com.creditsai.model.CreditCurrency;
+import com.creditsai.model.AttachmentDraft;
 import com.creditsai.model.CreditPayment;
 import com.creditsai.model.CreditStatus;
 import com.creditsai.model.CreditType;
@@ -346,5 +347,57 @@ class CreditRepositoryTest {
         assertThat(repository.findByIdAndArchivedFalseAndClientArchivedFalse(archivedCredit.getId())).isEmpty();
         assertThat(repository.findByIdAndArchivedFalseAndClientArchivedFalse(visible.getId())).isPresent();
         assertThat(repository.findById(hidden.getId())).isPresent();
+    }
+
+    @Autowired
+    private CreditAttachmentRepository attachmentRepository;
+
+    @Test
+    void attachmentProjections_returnCreditIdsAndFileNames() {
+        // given
+        Client client = client("A", "1");
+        Credit first = credit(client, "1000", CreditStatus.ACTIVE, false);
+        Credit second = credit(client, "2000", CreditStatus.ACTIVE, false);
+        credit(client, "3000", CreditStatus.ACTIVE, false);
+        first.attach(new AttachmentDraft("b.pdf", "application/pdf", 1, "0".repeat(64), "u"), 30, 1000);
+        first.attach(new AttachmentDraft("a.pdf", "application/pdf", 1, "0".repeat(64), "u"), 30, 1000);
+        second.attach(new AttachmentDraft("c.pdf", "application/pdf", 1, "0".repeat(64), "u"), 30, 1000);
+        repository.saveAndFlush(first);
+        repository.saveAndFlush(second);
+
+        // when / then
+        assertThat(attachmentRepository.findCreditIdsWithAttachments())
+                .containsExactlyInAnyOrder(first.getId(), second.getId());
+        assertThat(attachmentRepository.findFileNamesByCreditId(first.getId()))
+                .containsExactlyInAnyOrder("a.pdf", "b.pdf");
+        assertThat(attachmentRepository.findFileNamesByCreditId(-1L)).isEmpty();
+    }
+
+    @Test
+    void findByIdForUpdate_existingAndMissing_returnsCreditOrEmpty() {
+        // given
+        Credit credit = credit(client("A", "1"), "1000", CreditStatus.ACTIVE, false);
+
+        // when / then
+        assertThat(repository.findByIdForUpdate(credit.getId())).isPresent();
+        assertThat(repository.findByIdForUpdate(-1L)).isEmpty();
+    }
+
+    @Test
+    void removeAttachment_orphanRemoval_deletesTheRow() {
+        // given
+        Credit credit = credit(client("A", "1"), "1000", CreditStatus.ACTIVE, false);
+        Long id = credit.attach(new AttachmentDraft("a.pdf", "application/pdf", 1, "0".repeat(64), "u"), 30, 1000)
+                .getId();
+        repository.saveAndFlush(credit);
+        Long attachmentId = attachmentRepository.findAll().get(0).getId();
+
+        // when
+        credit.removeAttachment(attachmentId);
+        repository.saveAndFlush(credit);
+
+        // then
+        assertThat(id).isNull();
+        assertThat(attachmentRepository.count()).isZero();
     }
 }

@@ -1,4 +1,4 @@
-/** A file attached to a client, as returned by `GET /api/clients/{id}/attachments`. */
+/** A file attached to a client or a credit, as returned by `GET /api/{clients|credits}/{id}/attachments`. */
 export interface Attachment {
   id: number;
   fileName: string;

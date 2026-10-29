@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Triggers the attachment storage cleanup once when the application is ready and then repeatedly
+ * Migrates the old attachment folder layout and triggers the attachment storage cleanup once when the application is ready and then repeatedly
  * with a fixed delay ({@code app.attachments.cleanup.interval}). It only starts the service and
  * makes sure no failure ever escapes into the scheduler.
  */
@@ -21,10 +21,16 @@ public class AttachmentCleanupJob {
     private final AttachmentStorageCleanupService cleanupService;
 
     /**
-     * Runs the cleanup once after startup.
+     * Moves the client folders of the old disk layout into place (once, idempotent) and only then
+     * runs the cleanup, so the cleanup never sees the old layout.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void runAtStartup() {
+        try {
+            cleanupService.migrateLegacyLayout();
+        } catch (RuntimeException e) {
+            log.error("Attachment folder migration failed", e);
+        }
         run();
     }
 

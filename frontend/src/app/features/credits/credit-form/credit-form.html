@@ -313,6 +313,15 @@
         } @else {
           <p class="hint">Press Calculate to see the payment plan. Save is available after that.</p>
         }
+
+        @if (!isEdit) {
+          <app-pending-files
+            class="files"
+            [(files)]="files"
+            [errors]="fileErrors()"
+            [disabled]="saving()"
+          />
+        }
       </mat-card-content>
 
       <mat-card-actions class="actions">
@@ -321,7 +330,9 @@
         <button
           mat-flat-button
           type="submit"
-          [disabled]="form.invalid || plan() === null || saving() || calculating()"
+          [disabled]="
+            form.invalid || plan() === null || saving() || calculating() || fileErrors().length > 0
+          "
         >
           Save
         </button>

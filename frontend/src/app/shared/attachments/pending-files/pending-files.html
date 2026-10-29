@@ -1,0 +1,39 @@
+<div class="files">
+  <button mat-stroked-button type="button" [disabled]="disabled()" (click)="picker.click()">
+    <mat-icon>attach_file</mat-icon>
+    Attach files (optional)
+  </button>
+  <input
+    #picker
+    class="picker"
+    type="file"
+    name="files"
+    multiple
+    [accept]="accept"
+    (change)="onFilesSelected($event)"
+  />
+  <span class="hint">{{ limitsText }}</span>
+  @for (file of files(); track file) {
+    <div class="file">
+      <mat-icon>draft</mat-icon>
+      <span class="file-name">{{ file.name }}</span>
+      <span class="hint">{{ file.size | fileSize }}</span>
+      <button
+        mat-icon-button
+        type="button"
+        [disabled]="disabled()"
+        [attr.aria-label]="'Remove ' + file.name"
+        (click)="removeFile(file)"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  }
+  @if (errors().length > 0) {
+    <ul class="file-errors" role="alert">
+      @for (error of errors(); track error) {
+        <li>{{ error }}</li>
+      }
+    </ul>
+  }
+</div>

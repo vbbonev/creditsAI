@@ -9,6 +9,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
+import { Attachments } from '../../../shared/attachments/attachments/attachments';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { CREDIT_STATUS_LABELS, CREDIT_TYPE_LABELS, Credit, CreditStatus } from '../credit.model';
@@ -20,10 +21,11 @@ import { PaymentPlan } from '../payment-plan/payment-plan';
  * the credit form page), Activate/Deactivate, Archive (only while INACTIVE, after a
  * confirmation) and Restore. Status changes update the page in place; archive and restore
  * return to the list with a success message. A refused action is reported by the HTTP error
- * interceptor and the page stays. USER sees no actions.
+ * interceptor and the page stays. USER sees no actions. A Files section (shared attachments component) lists the credit's files; only ADMIN adds or removes them.
  */
 @Component({
   imports: [
+    Attachments,
     CurrencyPipe,
     DatePipe,
     DecimalPipe,

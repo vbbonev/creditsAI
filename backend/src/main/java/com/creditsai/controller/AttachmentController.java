@@ -1,16 +1,11 @@
 package com.creditsai.controller;
 
-import com.creditsai.dto.AttachmentDownload;
 import com.creditsai.dto.AttachmentResponse;
 import com.creditsai.dto.AttachmentUpload;
 import com.creditsai.service.AttachmentService;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.CacheControl;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.core.io.Resource;
@@ -65,18 +60,8 @@ public class AttachmentController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public ResponseEntity<Resource> download(@PathVariable Long clientId, @PathVariable Long attachmentId,
                                              Authentication authentication) {
-        AttachmentDownload file = attachmentService.download(clientId, attachmentId,
-                ClientAuthentication.isAdmin(authentication));
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(file.contentType()))
-                .contentLength(file.sizeBytes())
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment().filename(file.fileName(), StandardCharsets.UTF_8).build()
-                                .toString())
-                .header("X-Content-Type-Options", "nosniff")
-                .header("Content-Security-Policy", "sandbox; default-src 'none'")
-                .cacheControl(CacheControl.noStore().cachePrivate())
-                .body(file.content());
+        return ClientAuthentication.toDownloadResponse(attachmentService.download(clientId, attachmentId,
+                ClientAuthentication.isAdmin(authentication)));
     }
 
     /**

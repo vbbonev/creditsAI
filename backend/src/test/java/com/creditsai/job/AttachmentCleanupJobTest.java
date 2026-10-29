@@ -24,13 +24,41 @@ class AttachmentCleanupJobTest {
     @Test
     void runAtStartup_callsTheService() {
         // given
-        given(service.cleanup()).willReturn(new StorageCleanupReport(0, 0, 0, 0, 0));
+        given(service.cleanup()).willReturn(new StorageCleanupReport(0, 0, 0, 0, 0, 0));
+
+        // when
+        job.runAtStartup();
+
+        // then
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(service);
+        order.verify(service).migrateLegacyLayout();
+        order.verify(service).cleanup();
+    }
+
+    @Test
+    void runAtStartup_migrationFails_cleanupStillRuns() {
+        // given
+        given(service.migrateLegacyLayout()).willThrow(new IllegalStateException("boom"));
+        given(service.cleanup()).willReturn(new StorageCleanupReport(0, 0, 0, 0, 0, 0));
 
         // when
         job.runAtStartup();
 
         // then
         verify(service).cleanup();
+    }
+
+    @Test
+    void runScheduled_doesNotMigrate() {
+        // given
+        given(service.cleanup()).willReturn(new StorageCleanupReport(0, 0, 0, 0, 0, 0));
+
+        // when
+        job.runScheduled();
+
+        // then
+        verify(service).cleanup();
+        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).migrateLegacyLayout();
     }
 
     @Test

@@ -7,12 +7,14 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { ConfirmDialog } from '../../../shared/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { Credit } from '../credit.model';
+import { AttachmentService } from '../../../shared/attachments/attachment.service';
 import { CreditService } from '../credit.service';
 import { CreditDetail } from './credit-detail';
 
 describe('CreditDetail', () => {
   let fixture: ComponentFixture<CreditDetail>;
   let el: HTMLElement;
+  let attachmentService: { list: ReturnType<typeof vi.fn> };
   let creditService: {
     get: ReturnType<typeof vi.fn>;
     changeStatus: ReturnType<typeof vi.fn>;
@@ -79,6 +81,7 @@ describe('CreditDetail', () => {
     error?: HttpErrorResponse;
     admin?: boolean;
   }): Promise<void> {
+    attachmentService = { list: vi.fn().mockReturnValue(of([])) };
     creditService = {
       get: vi
         .fn()
@@ -100,6 +103,7 @@ describe('CreditDetail', () => {
           useValue: { snapshot: { paramMap: convertToParamMap({ id: options.id ?? '7' }) } },
         },
         { provide: CreditService, useValue: creditService },
+        { provide: AttachmentService, useValue: attachmentService },
         { provide: MatDialog, useValue: dialog },
         { provide: NotificationService, useValue: notification },
         { provide: AuthService, useValue: { isAdmin: () => options.admin ?? false } },
@@ -133,6 +137,12 @@ describe('CreditDetail', () => {
     expect(el.querySelector('.rate')?.textContent).toContain('5.25%');
     expect(el.querySelector('.start')?.textContent).toContain('05.01.2026');
     expect(el.querySelector('.end')?.textContent).toContain('05.03.2026');
+  });
+
+  it('should show the Files section of the loaded credit, for every credit status', async () => {
+    await render({});
+    expect(attachmentService.list).toHaveBeenCalledWith('credits', 7);
+    expect(el.querySelector('app-attachments')).not.toBeNull();
   });
 
   it('should show the collateral value and description', async () => {

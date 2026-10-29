@@ -16,7 +16,9 @@ import com.creditsai.config.AttachmentCleanupProperties;
 import com.creditsai.config.AttachmentProperties;
 import com.creditsai.dto.StorageCleanupReport;
 import com.creditsai.exception.AttachmentStorageException;
+import com.creditsai.model.AttachmentOwnerType;
 import com.creditsai.repository.ClientAttachmentRepository;
+import com.creditsai.repository.CreditAttachmentRepository;
 import com.creditsai.storage.FileSystemAttachmentStorage;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -45,6 +47,9 @@ class AttachmentStorageCleanupServiceImplTest {
     @Mock
     private ClientAttachmentRepository repository;
 
+    @Mock
+    private CreditAttachmentRepository creditRepository;
+
     private Path base;
     private FileSystemAttachmentStorage storage;
     private AttachmentStorageCleanupServiceImpl service;
@@ -56,7 +61,7 @@ class AttachmentStorageCleanupServiceImplTest {
         Files.createDirectories(base);
         storage = spy(new FileSystemAttachmentStorage(
                 new AttachmentProperties(base, DataSize.ofMegabytes(5), DataSize.ofMegabytes(20), 30)));
-        service = new AttachmentStorageCleanupServiceImpl(storage, repository,
+        service = new AttachmentStorageCleanupServiceImpl(storage, repository, creditRepository,
                 new AttachmentCleanupProperties(Duration.ofHours(1), Duration.ofMinutes(15)));
         logs = new ListAppender<>();
         logs.start();
@@ -69,7 +74,11 @@ class AttachmentStorageCleanupServiceImplTest {
     }
 
     private Path file(String client, String name, Duration age) throws IOException {
-        Path dir = Files.createDirectories(base.resolve(client));
+        return file("clients", client, name, age);
+    }
+
+    private Path file(String root, String owner, String name, Duration age) throws IOException {
+        Path dir = Files.createDirectories(base.resolve(root).resolve(owner));
         Path f = Files.writeString(dir.resolve(name), "x");
         Files.setLastModifiedTime(f, FileTime.from(Instant.now().minus(age)));
         return f;
@@ -101,7 +110,7 @@ class AttachmentStorageCleanupServiceImplTest {
         assertThat(report.leftoversRemoved()).isEqualTo(2);
         assertThat(messages(Level.INFO)).anyMatch(m -> m.equals(
                 "Attachment cleanup: removed leftover file '.deleted-abc' of client 1"));
-        assertThat(messages(Level.INFO)).anyMatch(m -> m.contains("Attachment cleanup finished: 1 clients checked, 2 leftovers removed"));
+        assertThat(messages(Level.INFO)).anyMatch(m -> m.contains("Attachment cleanup finished: 1 clients and 0 credits checked, 2 leftovers removed"));
         assertThat(String.join("\n", messages(Level.INFO))).doesNotContain(tempDir.toString());
     }
 
@@ -187,7 +196,8 @@ class AttachmentStorageCleanupServiceImplTest {
         Path outside = Files.createDirectories(tempDir.resolve("outside"));
         Path outsideLeftover = Files.writeString(outside.resolve(".deleted-zzz"), "x");
         Files.setLastModifiedTime(outsideLeftover, FileTime.from(Instant.now().minus(Duration.ofDays(1))));
-        Files.createSymbolicLink(base.resolve("7"), outside);
+        Files.createDirectories(base.resolve("clients"));
+        Files.createSymbolicLink(base.resolve("clients").resolve("7"), outside);
         given(repository.findClientIdsWithAttachments()).willReturn(List.of());
 
         // when
@@ -203,8 +213,8 @@ class AttachmentStorageCleanupServiceImplTest {
     void cleanup_symlinkedFileInsideClientFolder_isNotFollowedOrDeleted() throws IOException {
         // given
         Path target = Files.writeString(tempDir.resolve("secret.txt"), "secret");
-        Files.createDirectories(base.resolve("1"));
-        Path link = Files.createSymbolicLink(base.resolve("1/.deleted-link"), target);
+        Files.createDirectories(base.resolve("clients/1"));
+        Path link = Files.createSymbolicLink(base.resolve("clients/1/.deleted-link"), target);
         Files.setLastModifiedTime(target, FileTime.from(Instant.now().minus(Duration.ofDays(1))));
         given(repository.findClientIdsWithAttachments()).willReturn(List.of());
         given(repository.findFileNamesByClientId(1L)).willReturn(List.of());
@@ -225,7 +235,7 @@ class AttachmentStorageCleanupServiceImplTest {
         Path other = file("2", ".deleted-c", Duration.ofHours(1));
         given(repository.findClientIdsWithAttachments()).willReturn(List.of());
         given(repository.findFileNamesByClientId(anyLong())).willReturn(List.of());
-        lenient().doThrow(new AttachmentStorageException("boom")).when(storage).deleteLeftover(eq(1L), eq(".deleted-a"));
+        lenient().doThrow(new AttachmentStorageException("boom")).when(storage).deleteLeftover(eq(AttachmentOwnerType.CLIENT), eq(1L), eq(".deleted-a"));
 
         // when
         StorageCleanupReport report = service.cleanup();
@@ -262,6 +272,83 @@ class AttachmentStorageCleanupServiceImplTest {
         given(repository.findClientIdsWithAttachments()).willReturn(List.of());
 
         // when / then
-        assertThat(service.cleanup()).isEqualTo(new StorageCleanupReport(0, 0, 0, 0, 0));
+        assertThat(service.cleanup()).isEqualTo(new StorageCleanupReport(0, 0, 0, 0, 0, 0));
+    }
+
+    @Test
+    void cleanup_creditFolders_oldLeftoversRemovedOrphansReportedAndRowsWithoutFileReported() throws IOException {
+        // given: credit 5 has an old tombstone, an old orphan and a file with a row; credit 6 has a row but no folder
+        Path tomb = file("credits", "5", ".deleted-abc", Duration.ofHours(1));
+        Path temp = file("credits", "5", ".upload-xyz.tmp", Duration.ofHours(2));
+        Path orphan = file("credits", "5", "orphan.pdf", Duration.ofHours(3));
+        file("credits", "5", "here.pdf", Duration.ofHours(3));
+        given(repository.findClientIdsWithAttachments()).willReturn(List.of());
+        given(creditRepository.findCreditIdsWithAttachments()).willReturn(List.of(5L, 6L));
+        given(creditRepository.findFileNamesByCreditId(5L)).willReturn(List.of("here.pdf", "gone.pdf"));
+        given(creditRepository.findFileNamesByCreditId(6L)).willReturn(List.of("lost.pdf"));
+
+        // when
+        StorageCleanupReport report = service.cleanup();
+
+        // then
+        assertThat(tomb).doesNotExist();
+        assertThat(temp).doesNotExist();
+        assertThat(orphan).exists();
+        assertThat(report.creditsChecked()).isEqualTo(2);
+        assertThat(report.clientsChecked()).isZero();
+        assertThat(report.leftoversRemoved()).isEqualTo(2);
+        assertThat(report.orphanFiles()).isEqualTo(1);
+        assertThat(report.missingFiles()).isEqualTo(2);
+        assertThat(messages(Level.WARN)).contains(
+                "Attachment cleanup: file 'orphan.pdf' of credit 5 has no database row (not deleted)",
+                "Attachment cleanup: database row for file 'lost.pdf' of credit 6 has no file");
+    }
+
+    @Test
+    void cleanup_clientAndCreditWithSameId_areCheckedSeparately() throws IOException {
+        // given: client 1 and credit 1 each own one file with a row
+        file("clients", "1", "c.pdf", Duration.ofHours(3));
+        file("credits", "1", "d.pdf", Duration.ofHours(3));
+        given(repository.findClientIdsWithAttachments()).willReturn(List.of(1L));
+        given(repository.findFileNamesByClientId(1L)).willReturn(List.of("c.pdf"));
+        given(creditRepository.findCreditIdsWithAttachments()).willReturn(List.of(1L));
+        given(creditRepository.findFileNamesByCreditId(1L)).willReturn(List.of("d.pdf"));
+
+        // when
+        StorageCleanupReport report = service.cleanup();
+
+        // then
+        assertThat(report).isEqualTo(new StorageCleanupReport(1, 1, 0, 0, 0, 0));
+    }
+
+    @Test
+    void cleanup_creditRowsUnreadable_isCountedAndClientsStillChecked() throws IOException {
+        // given
+        file("clients", "1", "a.pdf", Duration.ofHours(3));
+        given(repository.findClientIdsWithAttachments()).willReturn(List.of());
+        given(repository.findFileNamesByClientId(1L)).willReturn(List.of());
+        given(creditRepository.findCreditIdsWithAttachments()).willThrow(new IllegalStateException("db down"));
+
+        // when
+        StorageCleanupReport report = service.cleanup();
+
+        // then
+        assertThat(report.errors()).isEqualTo(1);
+        assertThat(report.orphanFiles()).isEqualTo(1);
+    }
+
+    @Test
+    void migrateLegacyLayout_oldClientFolder_isMovedIntoClients() throws IOException {
+        // given
+        Files.createDirectories(base.resolve("4"));
+        Files.writeString(base.resolve("4/a.txt"), "x");
+
+        // when
+        int moved = service.migrateLegacyLayout();
+
+        // then
+        assertThat(moved).isEqualTo(1);
+        assertThat(base.resolve("clients/4/a.txt")).exists();
+        assertThat(base.resolve("4")).doesNotExist();
     }
 }

@@ -1,5 +1,6 @@
 package com.creditsai.service;
 
+import com.creditsai.dto.AttachmentUpload;
 import com.creditsai.dto.CreditCalculationRequest;
 import com.creditsai.dto.CreditRequest;
 import com.creditsai.dto.CreditResponse;
@@ -9,6 +10,7 @@ import com.creditsai.exception.BusinessRuleException;
 import com.creditsai.exception.InvalidRequestException;
 import com.creditsai.exception.ResourceNotFoundException;
 import com.creditsai.model.CreditStatus;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -36,6 +38,26 @@ public interface CreditService {
      * @throws InvalidRequestException if the end date is not a whole number of months after the start date
      */
     CreditResponse create(CreditRequest request);
+
+    /**
+     * Registers a new active credit together with its files, all or nothing: if any file is
+     * rejected, no credit is created and no file remains on disk. The plan is calculated exactly
+     * as in {@link #create(CreditRequest)}.
+     *
+     * @param request the validated credit data
+     * @param uploads the received files, may be empty
+     * @param uploadedBy the username recorded as uploader of the files
+     * @return the created credit with its plan
+     * @throws ResourceNotFoundException if the client does not exist or is archived
+     * @throws InvalidRequestException if the end date is not a whole number of months after the
+     *         start date, a file name is not acceptable or a file is empty
+     * @throws com.creditsai.exception.PayloadTooLargeException if a file is too large
+     * @throws com.creditsai.exception.UnsupportedFileTypeException if a file's content type is not
+     *         allowed or does not match its extension
+     * @throws com.creditsai.exception.BusinessRuleException if a name is repeated or the count or
+     *         total size limit is exceeded
+     */
+    CreditResponse create(CreditRequest request, List<AttachmentUpload> uploads, String uploadedBy);
 
     /**
      * Lists credits whose number, client name or client identifier contains the search text

@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgForm } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
@@ -14,6 +14,8 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, debounceTime, distinctUntilChanged, of, Subject, switchMap } from 'rxjs';
+import { validateFiles } from '../../../shared/attachments/attachment.validation';
+import { PendingFiles } from '../../../shared/attachments/pending-files/pending-files';
 import { parseIsoDate, toIsoDate } from '../../../shared/dates/date-math';
 import { applyServerErrors } from '../../../shared/forms/server-errors';
 import { hasFieldErrors } from '../../../shared/models/problem-detail';
@@ -62,7 +64,7 @@ interface CreditFormModel {
  * Full page with the template-driven form for a new credit (`/credits/new`) or for editing one
  * (`/credits/:id/edit`, ADMIN only, which starts with the saved plan shown and Save enabled). Flow: fill in the inputs, press Calculate to see the payment
  * plan, then Save. Save is enabled only while a plan from the current inputs is shown, so every
- * input change clears the plan. Only the inputs are saved; the server recalculates the plan. On
+ * input change clears the plan. Only the inputs are saved; the server recalculates the plan. A new credit can also carry files, sent with the first save in one multipart request. On
  * a 400 the backend's field messages are shown on the matching controls.
  */
 @Component({
@@ -81,6 +83,7 @@ interface CreditFormModel {
     MaxDecimalsValidator,
     NotBlankValidator,
     PaymentPlan,
+    PendingFiles,
     PickedOptionValidator,
     CreditTermValidator,
     RouterLink,
@@ -150,6 +153,12 @@ export class CreditForm implements OnInit {
 
   /** True while the save request is running; disables the buttons. */
   protected readonly saving = signal(false);
+
+  /** Files chosen for a new credit; sent with the first save. They are not calculation inputs, so changing them keeps the plan. */
+  protected readonly files = signal<File[]>([]);
+
+  /** Problems of the chosen files; any problem blocks Save. */
+  protected readonly fileErrors = computed(() => validateFiles(this.files(), [], 'credit'));
 
   /**
    * Wires the debounced client search.
@@ -277,14 +286,20 @@ export class CreditForm implements OnInit {
    * @param form the template-driven form
    */
   protected save(form: NgForm): void {
-    if (form.invalid || this.plan() === null || this.saving() || this.calculating()) {
+    if (
+      form.invalid ||
+      this.plan() === null ||
+      this.saving() ||
+      this.calculating() ||
+      this.fileErrors().length > 0
+    ) {
       return;
     }
     this.saving.set(true);
     const request = this.toRequest();
     const call =
       this.creditId === null
-        ? this.creditService.create(request)
+        ? this.creditService.createWithFiles(request, this.files())
         : this.creditService.update(this.creditId, request);
     call.subscribe({
       next: (saved) => {

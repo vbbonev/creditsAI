@@ -84,7 +84,7 @@ class AttachmentServiceImplTest {
     }
 
     private long filesOnDisk() throws IOException {
-        Path dir = tempDir.resolve("data/1");
+        Path dir = tempDir.resolve("data/clients/1");
         if (!Files.exists(dir)) {
             return 0;
         }
@@ -280,7 +280,7 @@ class AttachmentServiceImplTest {
 
         // then
         assertThat(result.get(0).fileName()).isEqualTo("evil.txt");
-        assertThat(tempDir.resolve("data/1/evil.txt")).exists();
+        assertThat(tempDir.resolve("data/clients/1/evil.txt")).exists();
     }
 
     @Test
@@ -330,7 +330,7 @@ class AttachmentServiceImplTest {
 
         // then
         assertThat(result.get(0).fileName()).isEqualTo("report.pdf");
-        assertThat(tempDir.resolve("data/1").toFile().list()).containsExactly("report.pdf");
+        assertThat(tempDir.resolve("data/clients/1").toFile().list()).containsExactly("report.pdf");
     }
 
     @Test

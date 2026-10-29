@@ -14,7 +14,7 @@ describe('CreditForm', () => {
   let creditService: {
     get: ReturnType<typeof vi.fn>;
     calculate: ReturnType<typeof vi.fn>;
-    create: ReturnType<typeof vi.fn>;
+    createWithFiles: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     searchClients: ReturnType<typeof vi.fn>;
   };
@@ -73,7 +73,7 @@ describe('CreditForm', () => {
     creditService = {
       get: vi.fn().mockReturnValue(error ? throwError(() => error) : of(credit)),
       calculate: vi.fn().mockReturnValue(of(plan)),
-      create: vi.fn().mockReturnValue(of(saved)),
+      createWithFiles: vi.fn().mockReturnValue(of(saved)),
       update: vi.fn().mockReturnValue(of(saved)),
       searchClients: vi.fn().mockReturnValue(of([acme])),
     };
@@ -467,7 +467,7 @@ describe('CreditForm', () => {
           collateralValue: null,
           collateralDescription: null,
         };
-        expect(creditService.create).toHaveBeenCalledWith(request);
+        expect(creditService.createWithFiles).toHaveBeenCalledWith(request, []);
         expect(creditService.update).not.toHaveBeenCalled();
         expect(notification.success).toHaveBeenCalledWith('Credit CR-2026-000009 was created.');
         expect(navigate).toHaveBeenCalledWith(['/credits', 9]);
@@ -476,7 +476,7 @@ describe('CreditForm', () => {
       it('should show the backend field messages on the matching controls and stay', async () => {
         await fillValid();
         await calculate();
-        creditService.create.mockReturnValue(
+        creditService.createWithFiles.mockReturnValue(
           throwError(
             () =>
               new HttpErrorResponse({
@@ -513,6 +513,75 @@ describe('CreditForm', () => {
         await calculate();
 
         expect(errors('endDate')).toEqual(['End date must be after the start date.']);
+      });
+    });
+
+    describe('files', () => {
+      const pdf = new File(['x'], 'a.pdf', { type: 'application/pdf' });
+
+      /**
+       * Simulates choosing files in the picker.
+       * @param files the files to choose
+       */
+      async function pick(files: File[]): Promise<void> {
+        const input = control('files')!;
+        Object.defineProperty(input, 'files', { value: files, configurable: true });
+        input.dispatchEvent(new Event('change'));
+        await fixture.whenStable();
+      }
+
+      it('should send the chosen files with the first save', async () => {
+        await fillValid();
+        await calculate();
+        await pick([pdf]);
+
+        button('Save').click();
+        await fixture.whenStable();
+
+        expect(creditService.createWithFiles).toHaveBeenCalledTimes(1);
+        expect(creditService.createWithFiles.mock.calls[0][1]).toEqual([pdf]);
+      });
+
+      it('should keep the calculated plan when files are added or removed', async () => {
+        await fillValid();
+        await calculate();
+        await pick([pdf]);
+        expect(el.querySelector('app-payment-plan')).not.toBeNull();
+        expect(button('Save').disabled).toBe(false);
+
+        el.querySelector<HTMLButtonElement>('button[aria-label="Remove a.pdf"]')!.click();
+        await fixture.whenStable();
+        expect(el.querySelector('app-payment-plan')).not.toBeNull();
+        expect(button('Save').disabled).toBe(false);
+      });
+
+      it('should block Save and explain when a file is not allowed', async () => {
+        await fillValid();
+        await calculate();
+        await pick([new File(['x'], 'virus.exe')]);
+
+        expect(el.querySelector('.file-errors')!.textContent).toContain('not allowed');
+        expect(button('Save').disabled).toBe(true);
+        expect(creditService.createWithFiles).not.toHaveBeenCalled();
+      });
+
+      it('should block Save above 30 files and name a credit in the message', async () => {
+        await fillValid();
+        await calculate();
+        await pick(Array.from({ length: 31 }, (_, i) => new File(['x'], `f${i}.txt`)));
+
+        expect(el.querySelector('.file-errors')!.textContent).toContain(
+          'A credit can have at most 30 files.',
+        );
+        expect(button('Save').disabled).toBe(true);
+      });
+
+      it('should send an empty file list when nothing is attached', async () => {
+        await fillValid();
+        await calculate();
+        button('Save').click();
+        await fixture.whenStable();
+        expect(creditService.createWithFiles.mock.calls[0][1]).toEqual([]);
       });
     });
 
@@ -565,12 +634,13 @@ describe('CreditForm', () => {
         button('Save').click();
         await fixture.whenStable();
 
-        expect(creditService.create).toHaveBeenCalledWith(
+        expect(creditService.createWithFiles).toHaveBeenCalledWith(
           expect.objectContaining({
             hasCollateral: true,
             collateralValue: 20000,
             collateralDescription: 'A flat in Sofia',
           }),
+          [],
         );
       });
 
@@ -592,18 +662,24 @@ describe('CreditForm', () => {
         await calculate();
         button('Save').click();
         await fixture.whenStable();
-        expect(creditService.create).toHaveBeenCalledWith(
+        expect(creditService.createWithFiles).toHaveBeenCalledWith(
           expect.objectContaining({
             hasCollateral: false,
             collateralValue: null,
             collateralDescription: null,
           }),
+          [],
         );
       });
     });
   });
 
   describe('edit credit', () => {
+    it('should not offer a file picker', async () => {
+      await render('9');
+      expect(el.querySelector('app-pending-files')).toBeNull();
+    });
+
     it('should load the credit by the route id and prefill the form with its saved plan', async () => {
       await render('9');
       expect(creditService.get).toHaveBeenCalledWith(9);
@@ -672,7 +748,7 @@ describe('CreditForm', () => {
         collateralValue: null,
         collateralDescription: null,
       });
-      expect(creditService.create).not.toHaveBeenCalled();
+      expect(creditService.createWithFiles).not.toHaveBeenCalled();
       expect(notification.success).toHaveBeenCalledWith('Credit CR-2026-000009 was updated.');
       expect(navigate).toHaveBeenCalledWith(['/credits', 9]);
     });

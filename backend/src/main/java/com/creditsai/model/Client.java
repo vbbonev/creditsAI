@@ -34,7 +34,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Table(name = "clients")
 @Getter
 @NoArgsConstructor
-public class Client {
+public class Client implements AttachmentOwner {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -94,28 +94,31 @@ public class Client {
         return Collections.unmodifiableList(attachments);
     }
 
-    /**
-     * Checks whether one more file may be attached, without changing anything. Lets callers
-     * reject a file before doing expensive work on it.
-     *
-     * @param fileName the name of the new file, already sanitized (NFC, lower case)
-     * @param sizeBytes the size of the new file
-     * @param maxFiles the allowed number of files per client
-     * @param maxTotalBytes the allowed total size of all files of a client
-     * @throws BusinessRuleException if the name is taken, or the count or total size would be exceeded
-     */
+    /** {@inheritDoc} */
+    @Override
+    public AttachmentOwnerType attachmentOwnerType() {
+        return AttachmentOwnerType.CLIENT;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public void ensureCanAttach(String fileName, long sizeBytes, int maxFiles, long maxTotalBytes) {
-        if (attachments.stream().anyMatch(a -> a.getFileName().equals(fileName))) {
-            throw new BusinessRuleException("A file named '" + fileName + "' already exists for this client.");
-        }
-        if (attachments.size() >= maxFiles) {
-            throw new BusinessRuleException("A client can have at most " + maxFiles + " files.");
-        }
-        long total = attachments.stream().mapToLong(ClientAttachment::getSizeBytes).sum();
-        if (total + sizeBytes > maxTotalBytes) {
-            throw new BusinessRuleException("All files of a client together may take at most "
-                    + megabytes(maxTotalBytes) + ". This client already uses " + megabytes(total) + ".");
-        }
+        AttachmentRules.ensureCanAttach(attachments, AttachmentOwnerType.CLIENT, fileName, sizeBytes, maxFiles,
+                maxTotalBytes);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public ClientAttachment attach(AttachmentDraft draft, int maxFiles, long maxTotalBytes) {
+        ClientAttachment attachment = ClientAttachment.builder()
+                .fileName(draft.fileName())
+                .contentType(draft.contentType())
+                .sizeBytes(draft.sizeBytes())
+                .sha256(draft.sha256())
+                .uploadedBy(draft.uploadedBy())
+                .build();
+        addAttachment(attachment, maxFiles, maxTotalBytes);
+        return attachment;
     }
 
     /**
@@ -154,21 +157,7 @@ public class Client {
      *         to another client)
      */
     public ClientAttachment findAttachment(Long attachmentId) {
-        return attachments.stream()
-                .filter(a -> a.getId() != null && a.getId().equals(attachmentId))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Attachment " + attachmentId + " was not found."));
-    }
-
-    /**
-     * Formats a size for messages.
-     *
-     * @param bytes the size in bytes
-     * @return whole megabytes when exact (e.g. "20 MB"), otherwise bytes
-     */
-    private static String megabytes(long bytes) {
-        long mb = 1024L * 1024L;
-        return bytes % mb == 0 ? (bytes / mb) + " MB" : bytes + " bytes";
+        return AttachmentRules.find(attachments, attachmentId);
     }
 
     /**

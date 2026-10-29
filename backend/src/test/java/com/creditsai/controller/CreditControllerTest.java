@@ -1,5 +1,6 @@
 package com.creditsai.controller;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -18,6 +19,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.springframework.mock.web.MockMultipartFile;
+import java.nio.charset.StandardCharsets;
+import com.creditsai.exception.UnsupportedFileTypeException;
+import com.creditsai.dto.AttachmentUpload;
 import com.creditsai.config.CreditProperties;
 import com.creditsai.dto.ClientSummary;
 import com.creditsai.dto.CreditCalculationRequest;
@@ -672,5 +677,93 @@ class CreditControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.collateralValue")
                         .value("Collateral value may have at most 10 digits and 2 decimals."));
+    }
+
+    // ---- multipart create (credit JSON part + files) ----
+
+    private static MockMultipartFile creditPart(String json) {
+        return new MockMultipartFile("credit", "", MediaType.APPLICATION_JSON_VALUE,
+                json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static MockMultipartFile file(String name) {
+        return new MockMultipartFile("files", name, "application/pdf", "data".getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void createWithFiles_withoutToken_returns401() throws Exception {
+        mockMvc.perform(multipart("/api/credits").file(creditPart(VALID_BODY))).andExpect(status().isUnauthorized());
+        verifyNoInteractions(creditService);
+    }
+
+    @Test
+    void createWithFiles_asUser_returns201AndPassesFilesAndUsername() throws Exception {
+        // given
+        given(creditService.create(any(CreditRequest.class), any(), eq("user1"))).willReturn(response(5, false));
+
+        // when / then
+        mockMvc.perform(multipart("/api/credits").file(creditPart(VALID_BODY)).file(file("a.pdf")).file(file("b.pdf"))
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER"))
+                                .jwt(j -> j.claim("preferred_username", "user1"))))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.endsWith("/api/credits/5")))
+                .andExpect(jsonPath("$.id").value(5));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AttachmentUpload>> captor = ArgumentCaptor.forClass(List.class);
+        verify(creditService).create(any(CreditRequest.class), captor.capture(), eq("user1"));
+        org.assertj.core.api.Assertions.assertThat(captor.getValue())
+                .extracting(AttachmentUpload::fileName).containsExactly("a.pdf", "b.pdf");
+    }
+
+    @Test
+    void createWithFiles_asAdminWithoutFiles_returns201() throws Exception {
+        // given
+        given(creditService.create(any(CreditRequest.class), eq(List.of()), any())).willReturn(response(5, false));
+
+        // when / then
+        mockMvc.perform(multipart("/api/credits").file(creditPart(VALID_BODY)).with(admin()))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void createWithFiles_invalidCreditPart_returns400WithFieldErrors() throws Exception {
+        mockMvc.perform(multipart("/api/credits")
+                        .file(creditPart(VALID_BODY.replace("\"amount\":10000", "\"amount\":-5"))).with(user()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.amount").exists());
+        verifyNoInteractions(creditService);
+    }
+
+    @Test
+    void createWithFiles_missingCreditPart_returns400() throws Exception {
+        mockMvc.perform(multipart("/api/credits").file(file("a.pdf")).with(user()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createWithFiles_rejectedFile_returnsReadableProblem() throws Exception {
+        // given
+        given(creditService.create(any(CreditRequest.class), any(), any()))
+                .willThrow(new UnsupportedFileTypeException("File 'a.pdf' has an unsupported type."))
+                .willThrow(new BusinessRuleException("A credit can have at most 30 files."));
+
+        // when / then
+        mockMvc.perform(multipart("/api/credits").file(creditPart(VALID_BODY)).file(file("a.pdf")).with(user()))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.detail").value("File 'a.pdf' has an unsupported type."));
+        mockMvc.perform(multipart("/api/credits").file(creditPart(VALID_BODY)).file(file("a.pdf")).with(user()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("A credit can have at most 30 files."));
+    }
+
+    @Test
+    void create_jsonVariant_stillWorksAsBefore() throws Exception {
+        // given
+        given(creditService.create(any(CreditRequest.class))).willReturn(response(5, false));
+
+        // when / then
+        mockMvc.perform(post("/api/credits").with(user()).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isCreated());
+        verify(creditService).create(any(CreditRequest.class));
     }
 }

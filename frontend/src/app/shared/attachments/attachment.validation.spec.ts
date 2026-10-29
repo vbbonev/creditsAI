@@ -47,9 +47,9 @@ describe('attachment validation', () => {
     expect(validateFiles([file(decomposed)], [{ fileName: '\u00e4.pdf', sizeBytes: 1 }])).toEqual([
       `A file named "${decomposed}" is already attached.`,
     ]);
-    expect(validateFiles([file('Report.PDF')], [{ fileName: 'report.pdf', sizeBytes: 1 }])).toEqual([
-      'A file named "Report.PDF" is already attached.',
-    ]);
+    expect(validateFiles([file('Report.PDF')], [{ fileName: 'report.pdf', sizeBytes: 1 }])).toEqual(
+      ['A file named "Report.PDF" is already attached.'],
+    );
   });
 
   it('should reject more than 30 files including existing ones', () => {
@@ -75,6 +75,11 @@ describe('attachment validation', () => {
         four.map((f) => ({ fileName: f.name, sizeBytes: f.size })),
       ),
     ).toEqual(['All files of a client together can be at most 20 MB.']);
+  });
+
+  it('should name a credit in the messages when the owner is a credit', () => {
+    const thirtyOne = Array.from({ length: 31 }, (_, i) => file(`f${i}.pdf`, 1));
+    expect(validateFiles(thirtyOne, [], 'credit')).toEqual(['A credit can have at most 30 files.']);
   });
 
   it('should preview only browser-displayable pictures', () => {

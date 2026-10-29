@@ -11,7 +11,7 @@ import { Observable } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../shared/notification/notification.service';
-import { ClientAttachments } from '../client-attachments/client-attachments';
+import { Attachments } from '../../../shared/attachments/attachments/attachments';
 import { ClientForm, ClientFormData } from '../client-form/client-form';
 import { Client } from '../client.model';
 import { ClientService } from '../client.service';
@@ -24,7 +24,7 @@ import { ClientService } from '../client.service';
  */
 @Component({
   imports: [
-    ClientAttachments,
+    Attachments,
     DatePipe,
     MatButtonModule,
     MatCardModule,

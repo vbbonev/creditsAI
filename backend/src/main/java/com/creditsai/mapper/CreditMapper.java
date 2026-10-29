@@ -58,6 +58,7 @@ public interface CreditMapper {
      * @return a new, unsaved credit without client, collateral and plan
      */
     @Mapping(target = "payments", ignore = true)
+    @Mapping(target = "attachments", ignore = true)
     Credit toEntity(CreditRequest request);
 
     /**
@@ -67,6 +68,7 @@ public interface CreditMapper {
      * @param credit the entity to change
      */
     @Mapping(target = "payments", ignore = true)
+    @Mapping(target = "attachments", ignore = true)
     void updateEntity(CreditRequest request, @MappingTarget Credit credit);
 
     /**

@@ -6,7 +6,7 @@ import {
   PREVIEWABLE_MIME_TYPES,
 } from './attachment.constants';
 import { Attachment } from './attachment.model';
-import { formatFileSize } from '../../shared/pipes/file-size.pipe';
+import { formatFileSize } from '../pipes/file-size.pipe';
 
 /** The part of a `File` the validation needs. */
 export type FileInfo = Pick<File, 'name' | 'size' | 'type'>;
@@ -26,7 +26,7 @@ export function isAllowedType(file: Pick<File, 'name' | 'type'>): boolean {
 }
 
 /**
- * Builds the key under which file names are compared: names are unique per client regardless of
+ * Builds the key under which file names are compared: names are unique per owner regardless of
  * case, and NFC-normalized like the backend does (macOS often supplies decomposed names).
  * @param name the file name
  * @returns the comparison key
@@ -35,15 +35,20 @@ function nameKey(name: string): string {
   return name.normalize('NFC').toLowerCase();
 }
 
+/** The kind of record files are attached to; used in the messages. */
+export type AttachmentOwner = 'client' | 'credit';
+
 /**
- * Checks selected files against the limits, together with the files the client already has.
+ * Checks selected files against the limits, together with the files the owner already has.
  * @param files the newly selected files
- * @param existing the client's current attachments (empty when creating a client)
+ * @param existing the owner's current attachments (empty when creating the owner)
+ * @param owner what the files belong to, used in the messages
  * @returns readable messages, one per problem; empty when everything is fine
  */
 export function validateFiles(
   files: readonly FileInfo[],
   existing: readonly Pick<Attachment, 'fileName' | 'sizeBytes'>[] = [],
+  owner: AttachmentOwner = 'client',
 ): string[] {
   const errors: string[] = [];
   const seen = new Set(existing.map((a) => nameKey(a.fileName)));
@@ -62,13 +67,13 @@ export function validateFiles(
     seen.add(nameKey(file.name));
   }
   if (existing.length + files.length > ATTACHMENT_LIMITS.maxFiles) {
-    errors.push(`A client can have at most ${ATTACHMENT_LIMITS.maxFiles} files.`);
+    errors.push(`A ${owner} can have at most ${ATTACHMENT_LIMITS.maxFiles} files.`);
   }
   const total =
     existing.reduce((sum, a) => sum + a.sizeBytes, 0) + files.reduce((sum, f) => sum + f.size, 0);
   if (total > ATTACHMENT_LIMITS.maxTotalBytes) {
     errors.push(
-      `All files of a client together can be at most ${formatFileSize(ATTACHMENT_LIMITS.maxTotalBytes)}.`,
+      `All files of a ${owner} together can be at most ${formatFileSize(ATTACHMENT_LIMITS.maxTotalBytes)}.`,
     );
   }
   return errors;

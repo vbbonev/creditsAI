@@ -63,6 +63,8 @@
 
       <h3 class="plan-title">Payment plan</h3>
       <app-payment-plan [plan]="credit.plan" [currency]="credit.currency" />
+
+      <app-attachments class="attachments" resource="credits" [ownerId]="credit.id" />
     </mat-card-content>
 
     <mat-card-actions class="actions">

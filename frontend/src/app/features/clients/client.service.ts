@@ -3,7 +3,6 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Page } from '../../shared/models/page';
-import { Attachment } from './attachment.model';
 import { Client, ClientQuery, ClientRequest } from './client.model';
 
 /**
@@ -93,48 +92,5 @@ export class ClientService {
     body.append('client', new Blob([JSON.stringify(request)], { type: 'application/json' }));
     files.forEach((file) => body.append('files', file, file.name));
     return this.http.post<Client>(this.baseUrl, body);
-  }
-
-  /**
-   * Lists the files attached to a client, sorted by name.
-   * @param clientId the client id
-   * @returns Observable emitting the attachments
-   */
-  listAttachments(clientId: number): Observable<Attachment[]> {
-    return this.http.get<Attachment[]>(`${this.baseUrl}/${clientId}/attachments`);
-  }
-
-  /**
-   * Downloads the bytes of an attachment with the bearer token (never a plain link).
-   * @param clientId the client id
-   * @param attachmentId the attachment id
-   * @returns Observable emitting the file content
-   */
-  downloadAttachment(clientId: number, attachmentId: number): Observable<Blob> {
-    return this.http.get(`${this.baseUrl}/${clientId}/attachments/${attachmentId}/content`, {
-      responseType: 'blob',
-    });
-  }
-
-  /**
-   * Adds files to an existing client (ADMIN only).
-   * @param clientId the client id
-   * @param files the files, sent as the parts `files`
-   * @returns Observable emitting the created attachments
-   */
-  uploadAttachments(clientId: number, files: readonly File[]): Observable<Attachment[]> {
-    const body = new FormData();
-    files.forEach((file) => body.append('files', file, file.name));
-    return this.http.post<Attachment[]>(`${this.baseUrl}/${clientId}/attachments`, body);
-  }
-
-  /**
-   * Permanently deletes an attachment (ADMIN only); unlike clients, files are not archived.
-   * @param clientId the client id
-   * @param attachmentId the attachment id
-   * @returns Observable that completes once the file is deleted
-   */
-  deleteAttachment(clientId: number, attachmentId: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/${clientId}/attachments/${attachmentId}`);
   }
 }

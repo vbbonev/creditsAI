@@ -6,8 +6,9 @@ import com.creditsai.exception.AttachmentStorageException;
 import com.creditsai.exception.InvalidRequestException;
 import com.creditsai.exception.PayloadTooLargeException;
 import com.creditsai.exception.UnsupportedFileTypeException;
-import com.creditsai.model.Client;
-import com.creditsai.model.ClientAttachment;
+import com.creditsai.model.AttachmentBase;
+import com.creditsai.model.AttachmentDraft;
+import com.creditsai.model.AttachmentOwner;
 import com.creditsai.storage.AllowedFileType;
 import com.creditsai.storage.AttachmentStorage;
 import com.creditsai.storage.FileNameSanitizer;
@@ -24,10 +25,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * Shared upload flow of the service layer (used when a client is created with files and when an
- * administrator adds files): sanitize the name, check the size, detect the real type, check the
- * extension, store the bytes and attach the metadata to the client. Extracted so both use cases
- * apply exactly the same checks. It must run inside the caller's transaction, so storage is
+ * Shared upload flow of the service layer (used when a client or credit is created with files and
+ * when an administrator adds files): sanitize the name, check the size, detect the real type,
+ * check the extension, store the bytes and attach the metadata to the owner. Extracted so all use
+ * cases, for clients and for credits, apply exactly the same checks. It must run inside the caller's transaction, so storage is
  * undone on rollback.
  */
 @Component
@@ -39,10 +40,10 @@ public class AttachmentIngestor {
     private final AttachmentProperties properties;
 
     /**
-     * Validates, stores and attaches every upload to the client, in order. The first problem
+     * Validates, stores and attaches every upload to the owner, in order. The first problem
      * aborts the whole batch.
      *
-     * @param client the saved client (with an id) that receives the files
+     * @param owner the saved client or credit (with an id) that receives the files
      * @param uploads the received files
      * @param uploadedBy the username recorded as uploader
      * @return the attached files, in upload order
@@ -53,10 +54,10 @@ public class AttachmentIngestor {
      * @throws com.creditsai.exception.BusinessRuleException if a name is taken or the count or
      *         total size limit would be exceeded
      */
-    public List<ClientAttachment> attach(Client client, List<AttachmentUpload> uploads, String uploadedBy) {
-        List<ClientAttachment> attached = new ArrayList<>();
+    public List<AttachmentBase> attach(AttachmentOwner owner, List<AttachmentUpload> uploads, String uploadedBy) {
+        List<AttachmentBase> attached = new ArrayList<>();
         for (AttachmentUpload upload : uploads) {
-            attached.add(attachOne(client, upload, uploadedBy));
+            attached.add(attachOne(owner, upload, uploadedBy));
         }
         return attached;
     }
@@ -64,12 +65,12 @@ public class AttachmentIngestor {
     /**
      * Runs the full flow for one file.
      *
-     * @param client the client that receives the file
+     * @param owner the client or credit that receives the file
      * @param upload the received file
      * @param uploadedBy the username recorded as uploader
      * @return the attached file
      */
-    private ClientAttachment attachOne(Client client, AttachmentUpload upload, String uploadedBy) {
+    private AttachmentBase attachOne(AttachmentOwner owner, AttachmentUpload upload, String uploadedBy) {
         String fileName = FileNameSanitizer.sanitize(upload.fileName());
         long maxFile = properties.maxFileSize().toBytes();
         long maxTotal = properties.maxTotalSize().toBytes();
@@ -80,25 +81,18 @@ public class AttachmentIngestor {
             throw new PayloadTooLargeException("File '" + fileName + "' is larger than the maximum allowed size of "
                     + properties.maxFileSize().toMegabytes() + " MB.");
         }
-        client.ensureCanAttach(fileName, upload.sizeBytes(), properties.maxFiles(), maxTotal);
+        owner.ensureCanAttach(fileName, upload.sizeBytes(), properties.maxFiles(), maxTotal);
         AllowedFileType type = detectAndCheck(fileName, upload);
 
         MessageDigest digest = newDigest();
         long written;
         try (InputStream in = new DigestInputStream(upload.source().getInputStream(), digest)) {
-            written = storage.store(client.getId(), fileName, in);
+            written = storage.store(owner.attachmentOwnerType(), owner.getId(), fileName, in);
         } catch (IOException e) {
             throw new AttachmentStorageException("Could not read an uploaded file.", e);
         }
-        ClientAttachment attachment = ClientAttachment.builder()
-                .fileName(fileName)
-                .contentType(type.mediaType())
-                .sizeBytes(written)
-                .sha256(HexFormat.of().formatHex(digest.digest()))
-                .uploadedBy(uploadedBy)
-                .build();
-        client.addAttachment(attachment, properties.maxFiles(), maxTotal);
-        return attachment;
+        return owner.attach(new AttachmentDraft(fileName, type.mediaType(), written,
+                HexFormat.of().formatHex(digest.digest()), uploadedBy), properties.maxFiles(), maxTotal);
     }
 
     /**

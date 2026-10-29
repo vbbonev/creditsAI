@@ -113,6 +113,28 @@ describe('CreditService', () => {
     req.flush({});
   });
 
+  it('should post a new credit with files as multipart: JSON part "credit" and parts "files"', async () => {
+    const pdf = new File(['x'], 'a.pdf', { type: 'application/pdf' });
+    const png = new File(['y'], 'b.png', { type: 'image/png' });
+    service.createWithFiles(request, [pdf, png]).subscribe();
+    const req = httpTesting.expectOne('/api/credits');
+    expect(req.request.method).toBe('POST');
+    const body = req.request.body as FormData;
+    expect(body).toBeInstanceOf(FormData);
+    const part = body.get('credit') as Blob;
+    expect(part.type).toBe('application/json');
+    expect(JSON.parse(await part.text())).toEqual(request);
+    expect((body.getAll('files') as File[]).map((f) => f.name)).toEqual(['a.pdf', 'b.png']);
+    req.flush({});
+  });
+
+  it('should send only the credit part when there are no files', () => {
+    service.createWithFiles(request, []).subscribe();
+    const body = httpTesting.expectOne('/api/credits').request.body as FormData;
+    expect(body.has('credit')).toBe(true);
+    expect(body.has('files')).toBe(false);
+  });
+
   it('should put an updated credit', () => {
     service.update(5, request).subscribe();
     const req = httpTesting.expectOne('/api/credits/5');

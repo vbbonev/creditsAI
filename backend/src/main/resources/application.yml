@@ -56,7 +56,7 @@ app:
     # Only tokens whose "azp" (authorized party) is this Keycloak client are accepted
     client-id: credits-web
   attachments:
-    # Files live in {storage-dir}/{clientId}/{fileName} (a Docker volume in compose)
+    # Files live in {storage-dir}/clients/{clientId}/{fileName} and {storage-dir}/credits/{creditId}/{fileName} (a Docker volume in compose)
     storage-dir: /data/attachments
     max-file-size: 5MB
     max-total-size: 20MB

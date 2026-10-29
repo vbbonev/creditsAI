@@ -2,9 +2,9 @@
 export const ATTACHMENT_LIMITS = {
   /** Maximum size of one file, in bytes (5 MB). */
   maxFileBytes: 5 * 1024 * 1024,
-  /** Maximum total size of all files of one client, in bytes (20 MB). */
+  /** Maximum total size of all files of one client or credit, in bytes (20 MB). */
   maxTotalBytes: 20 * 1024 * 1024,
-  /** Maximum number of files per client. */
+  /** Maximum number of files per client or credit. */
   maxFiles: 30,
 } as const;
 
