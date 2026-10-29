@@ -130,6 +130,15 @@ export class CreditService {
   }
 
   /**
+   * Downloads the payment plan of a credit as a PDF with the bearer token (never a plain link).
+   * @param id the credit id
+   * @returns Observable emitting the PDF content
+   */
+  downloadPaymentPlan(id: number): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${id}/payment-plan.pdf`, { responseType: 'blob' });
+  }
+
+  /**
    * Searches active clients by name or identifier for the client autocomplete.
    * @param search the typed text
    * @returns Observable emitting the best matches, by name

@@ -61,7 +61,18 @@
         }
       </dl>
 
-      <h3 class="plan-title">Payment plan</h3>
+      <div class="plan-header">
+        <h3 class="plan-title">Payment plan</h3>
+        <button
+          mat-stroked-button
+          class="plan-pdf"
+          [disabled]="downloading()"
+          (click)="downloadPlan(credit)"
+        >
+          <mat-icon>picture_as_pdf</mat-icon>
+          Payment plan PDF
+        </button>
+      </div>
       <app-payment-plan [plan]="credit.plan" [currency]="credit.currency" />
 
       <app-attachments class="attachments" resource="credits" [ownerId]="credit.id" />

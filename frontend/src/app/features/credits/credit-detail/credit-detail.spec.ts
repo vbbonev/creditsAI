@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ConfirmDialog } from '../../../shared/confirm-dialog/confirm-dialog';
 import { NotificationService } from '../../../shared/notification/notification.service';
@@ -20,6 +20,7 @@ describe('CreditDetail', () => {
     changeStatus: ReturnType<typeof vi.fn>;
     archive: ReturnType<typeof vi.fn>;
     restore: ReturnType<typeof vi.fn>;
+    downloadPaymentPlan: ReturnType<typeof vi.fn>;
   };
   let dialog: { open: ReturnType<typeof vi.fn> };
   let notification: { success: ReturnType<typeof vi.fn> };
@@ -91,6 +92,7 @@ describe('CreditDetail', () => {
       changeStatus: vi.fn(),
       archive: vi.fn(),
       restore: vi.fn(),
+      downloadPaymentPlan: vi.fn(),
     };
     dialog = { open: vi.fn() };
     notification = { success: vi.fn() };
@@ -291,6 +293,89 @@ describe('CreditDetail', () => {
       expect(creditService.restore).toHaveBeenCalledWith(7);
       expect(notification.success).toHaveBeenCalledWith('Credit CR-2026-000007 was restored.');
       expect(navigate).toHaveBeenCalledWith(['/credits']);
+    });
+  });
+
+  describe('payment plan PDF', () => {
+    let click: ReturnType<typeof vi.spyOn>;
+    let createUrl: ReturnType<typeof vi.fn>;
+    let revokeUrl: ReturnType<typeof vi.fn>;
+    let savedName: string | undefined;
+
+    beforeEach(() => {
+      createUrl = vi.fn().mockReturnValue('blob:pdf');
+      revokeUrl = vi.fn();
+      Object.assign(URL, { createObjectURL: createUrl, revokeObjectURL: revokeUrl });
+      savedName = undefined;
+      click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        savedName = this.download;
+      });
+    });
+
+    afterEach(() => click.mockRestore());
+
+    /**
+     * Finds the PDF button.
+     * @returns the button, or undefined if not shown
+     */
+    function pdfButton(): HTMLButtonElement | undefined {
+      return el.querySelector<HTMLButtonElement>('button.plan-pdf') ?? undefined;
+    }
+
+    it.each([false, true])('should show the button (admin: %s)', async (admin) => {
+      await render({ admin });
+      expect(pdfButton()?.textContent).toContain('Payment plan PDF');
+      expect(pdfButton()?.querySelector('mat-icon')?.textContent).toContain('picture_as_pdf');
+    });
+
+    it('should show the button for an archived credit viewed by ADMIN', async () => {
+      await render({ admin: true, credit: archived });
+      expect(pdfButton()).toBeDefined();
+    });
+
+    it('should download, save as {creditNumber}-payment-plan.pdf and revoke the URL', async () => {
+      await render({});
+      const blob = new Blob(['%PDF']);
+      creditService.downloadPaymentPlan.mockReturnValue(of(blob));
+      pdfButton()!.click();
+      await fixture.whenStable();
+      expect(creditService.downloadPaymentPlan).toHaveBeenCalledWith(7);
+      expect(createUrl).toHaveBeenCalledWith(blob);
+      expect(click).toHaveBeenCalledTimes(1);
+      expect(savedName).toBe('CR-2026-000007-payment-plan.pdf');
+      expect(revokeUrl).toHaveBeenCalledWith('blob:pdf');
+      expect(pdfButton()!.disabled).toBe(false);
+    });
+
+    it('should disable the button while the download is pending', async () => {
+      await render({});
+      const pending = new Subject<Blob>();
+      creditService.downloadPaymentPlan.mockReturnValue(pending);
+      pdfButton()!.click();
+      await fixture.whenStable();
+      expect(pdfButton()!.disabled).toBe(true);
+      pending.next(new Blob(['%PDF']));
+      pending.complete();
+      await fixture.whenStable();
+      expect(pdfButton()!.disabled).toBe(false);
+    });
+
+    it('should re-enable the button and save nothing when the download fails', async () => {
+      await render({});
+      creditService.downloadPaymentPlan.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 500 })),
+      );
+      pdfButton()!.click();
+      await fixture.whenStable();
+      expect(click).not.toHaveBeenCalled();
+      expect(pdfButton()!.disabled).toBe(false);
+    });
+
+    it('should not show the button when the credit was not found', async () => {
+      await render({ error: new HttpErrorResponse({ status: 404 }) });
+      expect(pdfButton()).toBeUndefined();
     });
   });
 });

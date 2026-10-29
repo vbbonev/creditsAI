@@ -5,6 +5,7 @@ import com.creditsai.dto.CreditCalculationRequest;
 import com.creditsai.dto.CreditRequest;
 import com.creditsai.dto.CreditResponse;
 import com.creditsai.dto.CreditSummaryResponse;
+import com.creditsai.dto.PaymentPlanPdf;
 import com.creditsai.dto.PaymentPlanResponse;
 import com.creditsai.exception.BusinessRuleException;
 import com.creditsai.exception.InvalidRequestException;
@@ -123,4 +124,15 @@ public interface CreditService {
      * @throws BusinessRuleException if the credit is not archived
      */
     CreditResponse restore(Long id);
+
+    /**
+     * Renders the payment plan of a credit as a PDF document, with the same visibility rules as
+     * {@link #get(Long, boolean)}.
+     *
+     * @param id the credit id
+     * @param includeArchived whether an archived credit, or a credit of an archived client, may be rendered
+     * @return the file name and the PDF bytes
+     * @throws ResourceNotFoundException if it does not exist, or is hidden and not allowed
+     */
+    PaymentPlanPdf paymentPlanPdf(Long id, boolean includeArchived);
 }

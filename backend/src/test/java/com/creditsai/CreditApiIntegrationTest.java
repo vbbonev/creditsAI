@@ -682,4 +682,47 @@ class CreditApiIntegrationTest {
         assertThat(freshPost).contains("\"amount\":5000.00", "\"interestRate\":5.2500",
                 "\"collateralValue\":7000.00");
     }
+
+    // ---- payment plan PDF ----
+
+    @Test
+    void paymentPlanPdf_archivedCredit_is404ForUserAndPdfForAdmin() throws Exception {
+        // given: an archived credit
+        long id = createCredit(createClient("Клиент"), 12);
+
+        // then: a visible credit gives a PDF download to USER
+        byte[] pdf = mockMvc.perform(get("/api/credits/" + id + "/payment-plan.pdf").with(USER))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string("Content-Disposition",
+                        org.hamcrest.Matchers.matchesPattern("attachment; filename=\"CR-\\d{4}-\\d{6}-payment-plan\\.pdf\"")))
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(pdf, 0, 5, java.nio.charset.StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+
+        // when: the credit is archived
+        deactivate(id);
+        mockMvc.perform(delete("/api/credits/" + id).with(ADMIN)).andExpect(status().isNoContent());
+
+        // then: 404 for USER (problem details), 200 for ADMIN, 404 when missing
+        mockMvc.perform(get("/api/credits/" + id + "/payment-plan.pdf").with(USER))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/credits/" + id + "/payment-plan.pdf").with(ADMIN))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/credits/999999/payment-plan.pdf").with(ADMIN))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void paymentPlanPdf_creditOfArchivedClient_is404ForUserAndPdfForAdmin() throws Exception {
+        // given
+        long id = hiddenCredit();
+
+        // when / then
+        mockMvc.perform(get("/api/credits/" + id + "/payment-plan.pdf").with(USER))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/credits/" + id + "/payment-plan.pdf").with(ADMIN))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"));
+    }
 }

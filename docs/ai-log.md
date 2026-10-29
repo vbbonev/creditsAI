@@ -136,6 +136,24 @@
   6. Hibernate inserts before it deletes, so regenerating a plan broke the unique `(credit_id, payment_number)` → clear the rows and flush first.
 - **Evidence:** `backend/mvnw -f backend/pom.xml test` → Tests run: 523, Failures: 0, Errors: 0
 
+### 2026-10-29 — Payment plan PDF export (backend + detail page button)
+- **Approach:** Claude first checked the existing code: the plan is stored in `credit_payments` and there was no PDF library yet. It then asked open questions (browser print or PDF, where, content, who, language). The user chose "backend PDF on the detail page, with credit header, English". Multiple-choice questions then settled OpenPDF, the full credit header, and a file download. Claude set the defaults and stated them: the same visibility as `GET /api/credits/{id}`, the Liberation Sans font embedded because client names can be Cyrillic, and the UI formats (`€10,000.00`, `dd.MM.yyyy`).
+- **Workflow:**
+  1. `backend-dev` and `frontend-dev` ran in parallel with one agreed API contract (`GET /api/credits/{id}/payment-plan.pdf`, attachment, `no-store`).
+  2. Backend: OpenPDF 3.0.5 + `openpdf-fonts-extra`, `PaymentPlanPdfRenderer`, an injectable `Clock` bean, and a service method that reuses `get(id, isAdmin)`. Frontend: a "Payment plan PDF" button next to the plan heading. The blob download helper was moved into `shared/files/save-blob.ts`.
+  3. Claude reviewed the diff. `security-reviewer` found no High or Medium issues. Claude closed the Low test gap itself.
+- **Testing:** the full backend suite passes with 641 tests, 10 of them new. The new tests are: renderer tests that parse the PDF (Cyrillic name, formats, a 480-month plan with the header row and "Page N of M" on every page), a `@WebMvcTest` for roles and headers, and integration tests. One more integration test (credit of an archived client: USER 404, ADMIN 200) made the credit integration suite 34 tests, all passing. Frontend: 349 specs pass (8 new), and `ng build` succeeds.
+- **AI tooling used:** Claude Code with the `backend-dev`/`frontend-dev` subagents in parallel, `security-reviewer`, AskUserQuestion, and the java-tests rule.
+- **Key prompt(s):**
+  > let's implement new functionality - the posibility to print the payment plan of a credit
+  > backend PDF on the detail page, with credit header, English
+- **Issues / fixes:**
+  1. Review Low: no test for the PDF of an active credit whose client is archived → integration test added.
+  2. Review Low: `saveBlob` revokes the object URL right after the click, without adding the link to the page (reliability, not security) → left open.
+  3. Open: with `responseType: 'blob'` the error interceptor can't read the problem-detail body, so failed downloads (PDF and attachments) show a generic message. The user decides.
+  4. Observation: the UserPromptSubmit hook also logs subagent hand-back messages into `docs/prompts.log`, not only the user's prompts.
+- **Evidence:** `backend/mvnw -f backend/pom.xml test`, `npm --prefix frontend test -- --watch=false`. Not yet tried against the Docker stack or in a browser.
+
 ## Frontend
 
 ### 2026-10-26 — Angular skeleton, layout shell, HTTP error handling

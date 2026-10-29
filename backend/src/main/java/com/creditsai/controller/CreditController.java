@@ -6,6 +6,7 @@ import com.creditsai.dto.CreditRequest;
 import com.creditsai.dto.CreditResponse;
 import com.creditsai.dto.CreditStatusRequest;
 import com.creditsai.dto.CreditSummaryResponse;
+import com.creditsai.dto.PaymentPlanPdf;
 import com.creditsai.dto.PaymentPlanResponse;
 import com.creditsai.exception.InvalidRequestException;
 import com.creditsai.model.CreditStatus;
@@ -18,6 +19,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -150,6 +154,26 @@ public class CreditController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public CreditResponse get(@PathVariable Long id, Authentication authentication) {
         return creditService.get(id, ClientAuthentication.isAdmin(authentication));
+    }
+
+    /**
+     * Returns the payment plan of a credit as a PDF download; visible exactly like
+     * {@link #get(Long, Authentication)} (an archived credit is visible to ADMIN only, 404 for USER).
+     *
+     * @param id the credit id
+     * @param authentication the caller, used to decide whether archived credits may be seen
+     * @return 200 with the PDF as an attachment, not cacheable
+     */
+    @GetMapping(value = "/{id}/payment-plan.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public ResponseEntity<byte[]> paymentPlanPdf(@PathVariable Long id, Authentication authentication) {
+        PaymentPlanPdf pdf = creditService.paymentPlanPdf(id, ClientAuthentication.isAdmin(authentication));
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(pdf.fileName()).build().toString())
+                .cacheControl(CacheControl.noStore())
+                .body(pdf.content());
     }
 
     /**

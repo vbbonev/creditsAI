@@ -57,12 +57,15 @@ class CreditServiceImplTest {
     @Mock
     private AttachmentIngestor attachmentIngestor;
 
+    @Mock
+    private PaymentPlanPdfRenderer paymentPlanPdfRenderer;
+
     private CreditServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new CreditServiceImpl(creditRepository, clientRepository, Mappers.getMapper(CreditMapper.class),
-                attachmentIngestor);
+                attachmentIngestor, paymentPlanPdfRenderer);
     }
 
     private static Client client(long id, boolean archived) {
@@ -88,7 +91,7 @@ class CreditServiceImplTest {
         credit.assignTo(client);
         ReflectionTestUtils.setField(credit, "id", 7L);
         service = new CreditServiceImpl(creditRepository, clientRepository, Mappers.getMapper(CreditMapper.class),
-                attachmentIngestor);
+                attachmentIngestor, paymentPlanPdfRenderer);
         PaymentPlan plan = PaymentPlanCalculator.calculate(new BigDecimal("10000"), new BigDecimal("12"), START,
                 START.plusMonths(months));
         CreditMapper mapper = Mappers.getMapper(CreditMapper.class);

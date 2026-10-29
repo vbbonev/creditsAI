@@ -165,6 +165,17 @@ describe('CreditService', () => {
     req.flush({});
   });
 
+  it('should download the payment plan PDF as a blob with GET', () => {
+    let result: Blob | undefined;
+    service.downloadPaymentPlan(7).subscribe((blob) => (result = blob));
+    const req = httpTesting.expectOne('/api/credits/7/payment-plan.pdf');
+    expect(req.request.method).toBe('GET');
+    expect(req.request.responseType).toBe('blob');
+    const pdf = new Blob(['%PDF'], { type: 'application/pdf' });
+    req.flush(pdf);
+    expect(result).toBe(pdf);
+  });
+
   it('should search clients by text and reduce them to id, name and identifier', () => {
     let result: unknown;
     service.searchClients(' Acme ').subscribe((clients) => (result = clients));

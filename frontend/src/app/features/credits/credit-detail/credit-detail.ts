@@ -11,6 +11,7 @@ import { Observable } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { Attachments } from '../../../shared/attachments/attachments/attachments';
 import { ConfirmDialog, ConfirmDialogData } from '../../../shared/confirm-dialog/confirm-dialog';
+import { saveBlob } from '../../../shared/files/save-blob';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import { CREDIT_STATUS_LABELS, CREDIT_TYPE_LABELS, Credit, CreditStatus } from '../credit.model';
 import { CreditService } from '../credit.service';
@@ -21,7 +22,7 @@ import { PaymentPlan } from '../payment-plan/payment-plan';
  * the credit form page), Activate/Deactivate, Archive (only while INACTIVE, after a
  * confirmation) and Restore. Status changes update the page in place; archive and restore
  * return to the list with a success message. A refused action is reported by the HTTP error
- * interceptor and the page stays. USER sees no actions. A Files section (shared attachments component) lists the credit's files; only ADMIN adds or removes them.
+ * interceptor and the page stays. USER sees no admin actions. Everyone can download the payment plan as a PDF (button beside the plan heading). A Files section (shared attachments component) lists the credit's files; only ADMIN adds or removes them.
  */
 @Component({
   imports: [
@@ -69,6 +70,9 @@ export class CreditDetail implements OnInit {
   /** True while an action request is running; disables the buttons. */
   protected readonly busy = signal(false);
 
+  /** True while the payment plan PDF is downloading; disables its button. */
+  protected readonly downloading = signal(false);
+
   /**
    * Loads the credit named by the `id` route parameter.
    */
@@ -89,6 +93,21 @@ export class CreditDetail implements OnInit {
         this.loading.set(false);
         this.notFound.set(true);
       },
+    });
+  }
+
+  /**
+   * Downloads the payment plan as a PDF named `{creditNumber}-payment-plan.pdf` and hands it to the browser.
+   * @param credit the credit whose plan to download
+   */
+  protected downloadPlan(credit: Credit): void {
+    this.downloading.set(true);
+    this.creditService.downloadPaymentPlan(credit.id).subscribe({
+      next: (blob) => {
+        saveBlob(blob, `${credit.creditNumber}-payment-plan.pdf`);
+        this.downloading.set(false);
+      },
+      error: () => this.downloading.set(false),
     });
   }
 

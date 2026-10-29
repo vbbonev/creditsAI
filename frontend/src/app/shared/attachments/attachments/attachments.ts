@@ -18,6 +18,7 @@ import { Attachment } from '../attachment.model';
 import { fileIcon, isPreviewable, validateFiles } from '../attachment.validation';
 import { AttachmentOwner } from '../attachment.validation';
 import { AttachmentResource, AttachmentService } from '../attachment.service';
+import { saveBlob } from '../../files/save-blob';
 
 /**
  * Attachments section of a client or credit detail page (a reusable component parameterized by
@@ -152,12 +153,7 @@ export class Attachments implements OnInit {
     this.busy.set(true);
     this.attachmentService.download(this.resource(), this.ownerId(), attachment.id).subscribe({
       next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = attachment.fileName;
-        link.click();
-        URL.revokeObjectURL(url);
+        saveBlob(blob, attachment.fileName);
         this.busy.set(false);
       },
       error: () => this.busy.set(false),

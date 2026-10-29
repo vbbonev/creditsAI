@@ -5,6 +5,7 @@ import com.creditsai.dto.CreditCalculationRequest;
 import com.creditsai.dto.CreditRequest;
 import com.creditsai.dto.CreditResponse;
 import com.creditsai.dto.CreditSummaryResponse;
+import com.creditsai.dto.PaymentPlanPdf;
 import com.creditsai.dto.PaymentPlanResponse;
 import com.creditsai.exception.ResourceNotFoundException;
 import com.creditsai.mapper.CreditMapper;
@@ -35,6 +36,7 @@ public class CreditServiceImpl implements CreditService {
     private final ClientRepository clientRepository;
     private final CreditMapper creditMapper;
     private final AttachmentIngestor attachmentIngestor;
+    private final PaymentPlanPdfRenderer paymentPlanPdfRenderer;
 
     /** {@inheritDoc} */
     @Override
@@ -97,6 +99,12 @@ public class CreditServiceImpl implements CreditService {
                 ? creditRepository.findById(id).orElseThrow(() -> notFound(id))
                 : creditRepository.findByIdAndArchivedFalseAndClientArchivedFalse(id).orElseThrow(() -> notFound(id));
         return creditMapper.toResponse(credit);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public PaymentPlanPdf paymentPlanPdf(Long id, boolean includeArchived) {
+        return paymentPlanPdfRenderer.render(get(id, includeArchived));
     }
 
     /**

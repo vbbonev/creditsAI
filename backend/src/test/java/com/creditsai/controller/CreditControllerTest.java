@@ -29,6 +29,7 @@ import com.creditsai.dto.CreditCalculationRequest;
 import com.creditsai.dto.CreditRequest;
 import com.creditsai.dto.CreditResponse;
 import com.creditsai.dto.CreditSummaryResponse;
+import com.creditsai.dto.PaymentPlanPdf;
 import com.creditsai.dto.PaymentPlanResponse;
 import com.creditsai.dto.PaymentRowResponse;
 import com.creditsai.exception.BusinessRuleException;
@@ -765,5 +766,44 @@ class CreditControllerTest {
         mockMvc.perform(post("/api/credits").with(user()).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isCreated());
         verify(creditService).create(any(CreditRequest.class));
+    }
+
+    // ---- payment plan PDF ----
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_USER", "ROLE_ADMIN"})
+    void paymentPlanPdf_visibleCredit_returns200WithPdfHeaders(String role) throws Exception {
+        // given
+        byte[] content = "%PDF-test".getBytes(StandardCharsets.US_ASCII);
+        given(creditService.paymentPlanPdf(eq(7L), anyBoolean()))
+                .willReturn(new PaymentPlanPdf("CR-2026-000123-payment-plan.pdf", content));
+
+        // when / then
+        mockMvc.perform(get("/api/credits/7/payment-plan.pdf").with(jwt().authorities(new SimpleGrantedAuthority(role))))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().string("Content-Disposition",
+                        "attachment; filename=\"CR-2026-000123-payment-plan.pdf\""))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(content));
+        verify(creditService).paymentPlanPdf(7L, role.equals("ROLE_ADMIN"));
+    }
+
+    @Test
+    void paymentPlanPdf_withoutToken_returns401() throws Exception {
+        // when / then
+        mockMvc.perform(get("/api/credits/7/payment-plan.pdf")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(creditService);
+    }
+
+    @Test
+    void paymentPlanPdf_hiddenOrMissingCredit_returns404ProblemDetail() throws Exception {
+        // given
+        given(creditService.paymentPlanPdf(eq(9L), anyBoolean())).willThrow(new ResourceNotFoundException("Credit 9 not found."));
+
+        // when / then
+        mockMvc.perform(get("/api/credits/9/payment-plan.pdf").with(user()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").exists());
     }
 }

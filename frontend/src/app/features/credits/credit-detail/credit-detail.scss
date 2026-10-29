@@ -50,8 +50,17 @@
   white-space: pre-line;
 }
 
-.plan-title {
+.plan-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 24px 0 12px;
+}
+
+.plan-title {
+  margin: 0;
   font: var(--mat-sys-title-medium);
 }
 
