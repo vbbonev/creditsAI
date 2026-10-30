@@ -28,7 +28,36 @@
 - **Issues / fixes:** (1) Claude inspected the built `index.html` and found that Angular's critical-CSS inlining adds an inline `<script>`, which the CSP (`script-src 'self'`) blocks, so the page would load without its main stylesheet → set `inlineCritical: false` instead of weakening the CSP. (2) Security headers at server level would also land on `/auth/` and break Keycloak's login-status iframe → included them only in the SPA locations. (3) The test of nginx's per-request DNS (recreating the backend) was inconclusive: the container got the same IP back.
 - **Evidence:** `bash .claude/skills/run-stack/scripts/up.sh`; `curl -sD - -o /dev/null http://localhost/`
 
+### 2026-10-30 — README for the lecturers, `.env` committed for a zero-setup demo
+- **Approach:** The lecturers must be able to clone, start and try the app without help, so the README covers start, test users, a 10-step demo, architecture, tests, troubleshooting and where the exam log is. `.env` holds only `change-me-*` demo passwords, so the user decided to commit it: a fresh clone then needs just `docker compose up -d --build --wait`.
+- **Workflow:**
+  1. Claude read `docker-compose.yml`, `docs/TODO.md` and the infrastructure rule, wrote `README.md`, then checked its UI wording against the templates and corrected three labels.
+  2. User: commit `.env`. The `protect-files.sh` hook and the settings deny rules stop Claude from reading or writing `.env`, so Claude removed `.env` from `.gitignore` and updated the README, `CLAUDE.md` and `.claude/rules/infrastructure.md`, and the user edited `.env` and `.env.example` from text Claude provided.
+  3. The user sent IDE screenshots of both files. Claude spotted the stale admin console URL (`localhost:8180`) still in them and ticked the matching `docs/TODO.md` item once the user agreed.
+  4. User: document the exam log. Claude read the `/exam-log` skill, the prompt-log hook and `docs/ai-log.md`, and added README section 8 plus a lecturer note at the top.
+- **Testing:** Documentation only, no code tests. The user's `docker compose up -d --build --wait` (screenshot) showed all 4 containers healthy with the committed demo `.env`. The demo walkthrough itself was not run end to end.
+- **AI tooling used:** Claude Code inline, `protect-files.sh` hook + `Read(./.env*)` deny rules, infrastructure rule, `/exam-log` skill.
+- **Key prompt(s):**
+  > let's make a readme file with info how to start the app because this is a course project and the lector nee too see and test what we have done together with you
+  > let's include the .env file in the repo. these is a demo project and we aren't concerned about security
+- **Issues / fixes:** (1) The first README draft guessed UI labels ("Print", "archived toggle", "authentication service unavailable"); a grep of the templates corrected them to "Payment plan PDF", "Show archived clients/credits" and "Login service unavailable". (2) Committing `.env` contradicted three documented rules; all were updated with the date, while the hook still keeps Claude away from the file. (3) While documenting the exam log, Claude found gaps in this log: no entries for Database layer, Testing, the Credit frontend or credit attachments.
+- **Evidence:** `git clone … && docker compose up -d --build --wait`, then http://localhost (`user1`/`user1`, `admin1`/`admin1`).
+
 ## Database layer
+
+### 2026-10-26 → 2026-10-28 — Liquibase schema: 7 changesets, guarded by a rule and a hook
+_Overview logged on 2026-10-30 from the changesets, the rules and the Backend API entries below, where each change was made._
+- **Approach:** The user chose Liquibase with formatted SQL, Spring Data JPA with derived queries or JPQL, and never native SQL. Hibernate only validates the schema (`ddl-auto=validate`), so a Liquibase change and its entity must match. Every test runs against real Postgres (Testcontainers), never H2, so the schema under test is the production one.
+- **Workflow:**
+  1. Infrastructure: one Postgres, two databases (`credits`, `keycloak`), each owned by its own user. The master changelog uses `includeAll` over `changes/NNN-*.sql`.
+  2. Changesets, one per feature, written by `backend-dev`: `001-create-clients`, `002-create-client-attachments`, `003`/`004` (file-name uniqueness, see Issues), `005-create-credits` (credit-number sequence `CR-{yyyy}-{000123}`, CHECK constraints for enums, money `NUMERIC(12,2)`), `006-create-credit-payments`, `007-create-credit-attachments`.
+  3. `.claude/rules/liquibase.md` sets the conventions (rollback per changeset, identity keys, `TIMESTAMPTZ`, indexed FKs). `protect-files.sh` blocks edits to existing changesets, native SQL and physical deletes.
+- **Testing:** the context test starts Liquibase on Testcontainers Postgres and validates every entity. `ClientRepositoryTest` and `CreditRepositoryTest` cover every derived/JPQL query with paging and sorting; `CreditSchemaTest` checks the constraints directly (CHECKs, unique keys, FKs, sizes).
+- **AI tooling used:** liquibase + jpa-repositories rules, `protect-files.sh` PreToolUse hook, `backend-dev` subagent, `/new-endpoint` skill.
+- **Key prompt(s):**
+  > We will use method name derived queries where possible and jpql queries where needed. We will never use native sql quieries. We will use liquibase (sql) db migrations.
+- **Issues / fixes:** (1) Duplicate attachment names changed twice: case-sensitive (002) → case-insensitive with a functional index (003) → lower-case names with a plain unique constraint (004, which halts if mixed-case rows exist). Each step was a new changeset, never an edit, because the hook enforces it. The HALT path of 004 is untested. (2) Money columns were first NUMERIC(15,2), caught against the rule's (12,2) before the commit. (3) Regenerating a plan broke the unique `(credit_id, payment_number)`, because Hibernate inserts before it deletes → clear and flush first.
+- **Evidence:** `ls backend/src/main/resources/db/changelog/changes/`; `docker compose exec postgres psql -U credits credits -c '\dt'`
 
 ## Authentication
 
@@ -136,6 +165,21 @@
   6. Hibernate inserts before it deletes, so regenerating a plan broke the unique `(credit_id, payment_number)` → clear the rows and flush first.
 - **Evidence:** `backend/mvnw -f backend/pom.xml test` → Tests run: 523, Failures: 0, Errors: 0
 
+### 2026-10-28 — Credit attachments (backend + frontend), shared attachment core
+_Logged on 2026-10-30 from `docs/prompts.log`, commit `69b02df` and `docs/TODO.md`; `/exam-log` was not run that evening._
+- **Approach:** Same rules as client attachments, with credit-specific rights decided by the user: a USER attaches files only in the first save (multipart create on `/credits/new`); after that only ADMIN adds or removes, whatever the status. Archived credits and credits of archived clients are ADMIN-only. Limits are counted per credit. Instead of copying the client code, the agents generalized it into one shared core.
+- **Workflow:**
+  1. User: "implement file attachment to credit similarly to client attachments". Claude asked 5 questions; the user answered them in one message.
+  2. `backend-dev` and `frontend-dev` ran in parallel. Backend: changeset `007-create-credit-attachments.sql`, `AttachmentOwner`/`AttachmentOwnerType`, an `AttachmentBase` `@MappedSuperclass`, `AbstractAttachmentService`, `CreditAttachmentController`, multipart `POST /api/credits`. Disk layout `clients/{id}/` and `credits/{id}/`, with a one-time, idempotent startup migration of the old client folders.
+  3. Frontend: the attachment components moved to `shared/attachments/` (`Attachments` with `resource`/`ownerId` inputs, a `PendingFiles` picker, an `AttachmentService` for both resources). Credit files show on the credit detail page only.
+- **Testing:** backend 631 tests green, incl. `CreditAttachmentApiIntegrationTest` (26 tests: atomic multipart create, per-credit limits independent of the client's files, roles, archived visibility, wrong id pairing, parallel uploads, folder migration, cleanup over both roots). Frontend 340 specs green, `npm run build` OK.
+- **AI tooling used:** Claude Code, `backend-dev` + `frontend-dev` subagents in parallel, AskUserQuestion, liquibase/java-tests rules, `protect-files.sh` hook (physical delete again via `orphanRemoval`).
+- **Key prompt(s):**
+  > let's implement file attachment to credit similary to client attachments
+  > 1. user can only attach file before credit is firstly saved. Editing is for admin incl removing attachment on active credit;archived credit - admin only; 3. the same restrictions4. ok; 5. credit page only
+- **Issues / fixes:** (1) Spring reads `@Transactional` from the declaring class, so the abstract service repeats the annotations and the impls override and delegate. (2) Running Prettier over `src/app` reformatted two unrelated files; the agent restored them. (3) Before implementing, the user asked Claude to explain "Add and delete are ADMIN only and work on ACTIVE and archived credits"; the rule was kept.
+- **Evidence:** `backend/mvnw -f backend/pom.xml test`; on the stack: `/credits/new` with files as `user1`, then the Files section on `/credits/{id}` as `admin1`.
+
 ### 2026-10-29 — Payment plan PDF export (backend + detail page button)
 - **Approach:** Claude first checked the existing code: the plan is stored in `credit_payments` and there was no PDF library yet. It then asked open questions (browser print or PDF, where, content, who, language). The user chose "backend PDF on the detail page, with credit header, English". Multiple-choice questions then settled OpenPDF, the full credit header, and a file download. Claude set the defaults and stated them: the same visibility as `GET /api/credits/{id}`, the Liberation Sans font embedded because client names can be Cyrillic, and the UI formats (`€10,000.00`, `dd.MM.yyyy`).
 - **Workflow:**
@@ -204,4 +248,37 @@
   3. The build warns that the initial bundle is over the 500 kB budget. It's caused by the vendor chunks, not this feature.
 - **Evidence:** `npm --prefix frontend test -- --watch=false` (183 passed); http://localhost/clients/{id} as `user1`/`admin1` (screenshot candidates: the create dialog with files, the Files section with thumbnails, the preview dialog)
 
+### 2026-10-28 — Credit feature: list, full-page form with Calculate → Save, detail page
+_Logged on 2026-10-30 from `docs/prompts.log`, commit `0a06301` and `docs/TODO.md`; the `/exam-log` run that day only covered the credit backend._
+- **Approach:** Claude asked about the UI before building it. The user chose full pages instead of dialogs (the form plus a long payment plan don't fit a dialog). Save is enabled only after a successful Calculate, and any input change clears the plan, so a saved credit always matches a plan the user has seen. The plan is never recalculated automatically while typing.
+- **Workflow:**
+  1. User: "let's implement the credit functionality in frontend". Claude asked 6 questions; the user answered them in one message (full page, the Calculate/Save rule, not startable from the client page, fields and formats OK, the plan table must scroll).
+  2. `frontend-dev` built the routes (`/credits`, `/credits/new`, `/credits/:id`, `/credits/:id/edit` behind `adminGuard`), `CreditList` (search, status filter, ADMIN archived toggle, sort), `CreditForm` (client autocomplete, datepickers, collateral), `CreditDetail` and a shared `PaymentPlan` table with sticky header. Also a `dd.MM.yyyy` date adapter, `date-math` helpers that mirror the backend's month-end clamping, and validators (`appCreditTerm`, `appPickedOption`, `appMaxDecimals`).
+  3. The agent listed 9 choices it had made. The user changed one: the edit page must show the saved plan at once and clear it only when an input changes. The agent was resumed to fix it.
+  4. User: "run the stack and test it in the browser".
+- **Testing:** Vitest 183 → 319 → 321 specs, all green; `ng build` OK. Covered: Calculate sends `yyyy-MM-dd` dates; Save stays disabled until Calculate; every input clears the plan; 400 field errors land on the right controls; collateral fields; whole-month rule incl. 31 Jan → 28 Feb; USER sees no actions; Archive only for INACTIVE; a refused archive (409) keeps the page open.
+- **AI tooling used:** Claude Code, `frontend-dev` subagent (resumed with SendMessage), AskUserQuestion, `frontend/CLAUDE.md` (template-driven forms enforced by the PreToolUse hook).
+- **Key prompt(s):**
+  > let's implement the credit functionality in frontend
+  > 1. Full page; 2. sva eis allowed only after successful calculate. changing an input clear the shown plan.The plan doesn't recalculate automatically as user types but only after click on calculate button; ...
+  > saved plan should show at first and onlu clear once an input changes
+- **Issues / fixes:** (1) The agent read "Save only after Calculate" literally, so even an unchanged edit needed a recalculation → the saved plan is now prefilled with Save enabled. Prefill doesn't clear it, because `(ngModelChange)` fires only for user edits. (2) The initial bundle grew to 603 kB against the 500 kB budget (date adapter in the eager Material providers), left open in `docs/TODO.md`.
+- **Evidence:** `npm --prefix frontend test -- --watch=false`; http://localhost/credits/new as `user1` (screenshot candidates: the form with a calculated plan, the list with filters, the detail page as ADMIN)
+
 ## Testing
+
+### 2026-10-30 — Test strategy overview and a full run of both suites
+_Overview of how testing was done across all modules. The numbers come from a run in this session; the per-feature details are in the entries above._
+- **Approach:** CLAUDE.md requires "every change comes with tests, run them before saying a task is done". Tests are layered, so each layer is checked by the cheapest test that can catch its bugs. Real Postgres is used instead of H2, because the schema must match production. Security rules get a role matrix for every endpoint.
+- **Workflow:**
+  1. Backend layers (`.claude/rules/java-tests.md`): entity rules (`ClientTest`, `CreditTest`) with no Spring context; services with Mockito and the real MapStruct mapper; `@WebMvcTest` role matrix (no token → 401, USER/ADMIN per action, 400 per validation constraint); `@DataJpaTest` repositories and a schema test on Testcontainers; `@SpringBootTest` API flows end to end; a real-Tomcat test for the 413 upload limit; JWT tests (issuer, `azp=credits-web`, realm role mapping).
+  2. Domain checks by known values: the annuity calculator (10,000 at 12 % for 12 months → 888.49, 0 %, 1 and 480 months, 31 Jan in leap years) and the PDF renderer, which parses the generated PDF.
+  3. The `test-writer` subagent wrote most backend tests; `security-reviewer` findings were each closed with a regression test.
+  4. Frontend: Vitest specs for every component, service, guard, interceptor, validator and pipe (39 spec files).
+  5. Beyond unit tests: Claude ran throwaway Docker stacks and used curl with a real PKCE token through nginx (rights, 415 type spoofing, 413, 409, file modes on disk).
+- **Testing:** this session, `backend/mvnw -f backend/pom.xml test` → 681 tests, 0 failures, 0 errors, 0 skipped. `npm --prefix frontend test -- --watch=false` → 39 files, 349 specs passed.
+- **AI tooling used:** `test-writer` and `security-reviewer` subagents, java-tests rule, Testcontainers, Vitest, the run-stack skill.
+- **Key prompt(s):**
+  > let's make a security review
+- **Issues / fixes:** (1) Two integration tests left a temp storage folder after every run (38 found) → `@AfterAll` cleanup. (2) The functional tests didn't catch the unclosed `TikaInputStream` or the delete/re-upload race; the security review did, and each got a test. (3) Gaps: no E2E browser tests yet (Cypress vs Playwright is undecided in `docs/TODO.md`), and the HALT path of changeset 004 is untested.
+- **Evidence:** the two commands above; `backend/target/surefire-reports/`

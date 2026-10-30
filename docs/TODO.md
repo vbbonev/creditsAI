@@ -1,6 +1,6 @@
 # TODO — next session
 
-_Last updated: 2026-10-28. Infrastructure, backend skeleton, the Client feature (backend + frontend) and client attachments are done. Credit backend done (523 tests); Credit frontend done (319 specs), not yet checked in a browser._
+_Last updated: 2026-10-30 (README, `.env` committed). Before that, 2026-10-28: Infrastructure, backend skeleton, the Client feature (backend + frontend) and client attachments are done. Credit backend done (523 tests); Credit frontend done (319 specs), not yet checked in a browser._
 
 ## Before starting (user)
 - [ ] `git add -A` and commit the AI setup as its own commit (the index still holds older staged versions)
@@ -59,7 +59,9 @@ _Last updated: 2026-10-28. Infrastructure, backend skeleton, the Client feature 
    - [x] realm: only `http://localhost` in redirect URIs, web origins and post-logout redirect (the `localhost:4200` entries were removed). The realm was re-imported on 2026-10-26 (old realm deleted with `kcadm` inside the container, Keycloak restarted)
    - [x] nginx is the frontend container (no separate proxy) (decided 2026-10-26)
    - [x] simplified to one mode: no compose/Spring profiles, one Keycloak service, one `application.yml`, no CORS origins, Postgres without host port (decided 2026-10-26)
-   - [ ] `.env.example` (user edits; Claude can't read it): drop the "backend also reads this file ... from IntelliJ" comment, and change the admin console URL from `http://localhost:8180` to `http://localhost/auth/admin`
+   - [x] `.env.example` (user edits; Claude can't read it): drop the "backend also reads this file ... from IntelliJ" comment, and change the admin console URL from `http://localhost:8180` to `http://localhost/auth/admin` (done 2026-10-30, also in `.env`)
+   - [x] `.env` is committed with the demo `change-me-*` passwords, so a fresh clone runs with no setup; `.env.example` stays as a template (decided 2026-10-30, demo project)
+   - [x] `README.md` for the lecturer: start, test users, demo walkthrough, architecture, tests, troubleshooting, AI setup (2026-10-30)
    - [x] `frontend` port is published on loopback only, `127.0.0.1:80:80`, so the LAN can't reach the app or the Keycloak admin console at `/auth/admin` (decided 2026-10-26)
    - [x] HTTP error interceptor (2026-10-26): 401 → `login()`, `detail` in a snackbar, 400 with `errors` left to the form; `authenticatedGuard` sends a failed Keycloak init to `/unavailable` (76 specs); nginx shows `nginx-auth-unavailable.html` when Keycloak is unreachable (verified with an isolated container: 502 + the page, Keycloak's own 404 JSON still passes through)
    - [x] `frontend` service (`127.0.0.1:80:80`) + `frontend/Dockerfile` + `frontend/nginx.conf`: `/` SPA, `/api/` → `backend:8080`, `/auth/` → `keycloak:8080` with overwritten X-Forwarded headers. Verified 2026-10-26: all 4 services healthy, PKCE token through nginx reaches the backend on GET/POST/PUT/DELETE with `Origin: http://localhost`, foreign Origin 403, not reachable from the LAN

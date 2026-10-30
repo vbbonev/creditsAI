@@ -14,7 +14,7 @@ Any logged-in **USER** can register clients and credits. Only an **ADMIN** can e
 | Testing | `backend/src/test` | JUnit 5, Testcontainers |
 
 ## Commands
-- First copy `.env.example` to `.env` and set the passwords.
+- The demo passwords are in `.env`, which is committed on purpose so a fresh clone runs with no setup (decided 2026-10-30).
 - Everything runs in Docker, in development too (no dev/prod modes): `/run-stack` (or `docker compose up -d --build --wait`) starts postgres, keycloak, backend and the frontend nginx. Run the same command again to rebuild after a code change. Stop with `docker compose down`.
 - Test users: `user1`/`user1` (USER), `admin1`/`admin1` (ADMIN)
 - Backend tests: `backend/mvnw -f backend/pom.xml test`
@@ -23,7 +23,7 @@ Any logged-in **USER** can register clients and credits. Only an **ADMIN** can e
 
 ## Working rules
 - Never run `git add` / `git commit` / `git push`. The user commits.
-- Put secrets only in `.env` (gitignored). Never hardcode them and never read `.env`.
+- Put secrets only in `.env` (committed, demo values only). Never hardcode them anywhere else and never read `.env`.
 - Every change comes with tests. Run them before saying a task is done.
 - Ask the user about design decisions instead of assuming them.
 - Subagents: `backend-dev` and `frontend-dev` implement, `test-writer` writes backend tests, and `security-reviewer` audits auth-related changes.

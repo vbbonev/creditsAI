@@ -16,7 +16,7 @@ There are no dev/prod modes, compose profiles or Spring profiles. Development an
 - Stop: `docker compose down`
 - The only entry point is **nginx on `http://localhost`**, and port 80 is the only published port, bound to loopback only (`127.0.0.1:80:80`), so other machines on the network can't reach the app or the Keycloak admin console at `/auth/admin`. Postgres, Keycloak and the backend have no host ports.
 - No live reload and no debug port. Code changes reach the containers by rebuilding.
-- Use plain `localhost`, never a custom domain or hosts-file entry, so anyone can clone, `cp .env.example .env`, `docker compose up` and open http://localhost.
+- Use plain `localhost`, never a custom domain or hosts-file entry, so anyone can clone, `docker compose up` and open http://localhost.
 - Don't use a Docker network alias to make the backend see the public Keycloak URL: an alias can't take over `localhost` inside a container. Use the issuer/JWKS split below instead.
 
 ### Single entry point
@@ -83,4 +83,4 @@ Keycloak sets `KC_HOSTNAME=http://localhost/auth` explicitly, so the issuer neve
 
 ## Secrets
 - All passwords (Postgres superuser, `credits`/`keycloak` DB users, Keycloak admin) come from `.env` via `${VAR}` in compose. The backend gets `CREDITS_DB_PASSWORD` as a container environment variable.
-- Commit only `.env.example`, with placeholder values. Claude cannot write `.env` (a hook blocks it), so the user copies `.env.example` to `.env`.
+- `.env` is committed with demo passwords, so a fresh clone runs with no setup (decided 2026-10-30, demo project; not for a real deployment). `.env.example` stays as a template. Claude still cannot read or write `.env` (a hook and the settings block it); the user edits it.

@@ -1502,3 +1502,39 @@ backend PDF on the detail page, with credit header, English
 
 --- 2026-10-29 10:30:55
 /exam-log
+
+--- 2026-10-30 11:13:20
+let's make a readme file with info how to start the app because this is a course project and the lector nee too see and test what we have done together with you
+
+--- 2026-10-30 11:16:32
+let's include the .env file in the repo. these is a demo project and we aren't concerned about security
+
+--- 2026-10-30 11:19:02
+[Image #1]
+
+--- 2026-10-30 11:22:23
+[Image #2] [Image #3]
+
+--- 2026-10-30 11:23:58
+yes, update the TODO
+
+--- 2026-10-30 11:29:09
+let's add info about exam log in the Readme file. it is important for the lectors
+
+--- 2026-10-30 11:30:25
+/exam-log
+
+--- 2026-10-30 11:31:13
+let's fill the missing exam log entries
+
+--- 2026-10-30 11:32:23
+<task-notification>
+<task-id>btjdzyxaz</task-id>
+<tool-use-id>toolu_015rbd3iBbFTKwd2APKRoR6x</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-vbb-IdeaProjects-creditsAI/1844d9f6-3984-4198-afca-15f879d63241/tasks/btjdzyxaz.output</output-file>
+<status>completed</status>
+<summary>Background command "Run backend test suite and sum results" completed (exit code 0)</summary>
+</task-notification>
+
+--- 2026-10-30 11:34:59
+yes

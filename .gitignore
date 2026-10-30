@@ -1,5 +1,5 @@
-# Secrets
-.env
+# Secrets. `.env` itself is committed on purpose: this is a demo project, so a fresh clone
+# starts with no setup (decided 2026-10-30). Other .env.* files stay local.
 .env.*
 !.env.example
 
